@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.so
+
+# Env / secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+
+# ML models (large binary files — use git-lfs or re-train)
+data/models/*.joblib
+data/models/*.meta.json
+data/*.db
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Logs
+logs/
+*.log

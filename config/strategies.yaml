@@ -1,0 +1,64 @@
+# strategies.yaml
+# ────────────────
+# Trading strategy parameters loaded at runtime.
+# Risk values are derived from the 14-month Mandell backtest.
+
+default_strategy:
+  name: mandell_enhanced
+  version: "2.0"
+
+  # ── Timeframes ──────────────────────────────────────────────────────────────
+  primary_timeframe: "4h"
+  confirmation_timeframes: ["1h", "1d"]
+
+  # ── Technical Indicators ────────────────────────────────────────────────────
+  indicators:
+    rsi:
+      period: 14
+      oversold: 30
+      overbought: 70
+      deep_oversold: 25      # triggers STRONG_BUY bonus
+      deep_overbought: 75    # triggers STRONG_SELL bonus
+    bollinger:
+      period: 20
+      std_dev: 2
+      squeeze_threshold: 0.02   # bb_width < this = squeeze (breakout imminent)
+    ema:
+      fast: 9
+      medium: 21
+      slow: 50
+      trend: 200             # price vs EMA-200 used as trend filter
+    macd:
+      fast: 12
+      slow: 26
+      signal: 9
+    atr:
+      period: 14
+
+  # ── Agent Signal Weights ─────────────────────────────────────────────────────
+  # Used by debate engine to weight evidence (Phase 2)
+  agent_weights:
+    technical: 0.40
+    sentiment: 0.25
+    onchain:   0.20
+    debate:    0.15
+
+  # ── Risk Management ──────────────────────────────────────────────────────────
+  risk:
+    max_position_pct: 25.0
+    risk_per_trade_pct: 1.0
+    max_drawdown_pct: 10.0
+    min_confidence_threshold: 0.3
+
+    stop_loss:
+      strong_buy_atr_mult: 1.5
+      buy_atr_mult: 2.0
+      sell_atr_mult: 2.0
+      strong_sell_atr_mult: 1.5
+      fallback_pct: 2.5        # used when ATR unavailable
+
+    take_profit:
+      strong_buy_rr: 3.0       # 3:1 risk/reward
+      buy_rr: 2.5
+      sell_rr: 2.0
+      strong_sell_rr: 2.5

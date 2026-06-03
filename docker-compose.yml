@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  # Spot BTC/ETH trader (LangGraph pipeline)
+  superbot:
+    build: .
+    env_file: .env
+    command: ["deploy/live.py", "--paper"]
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+
+  # Polymarket hybrid bot
+  polymarket:
+    build: .
+    env_file: .env
+    command: ["deploy/live.py", "--paper", "--mode", "polymarket"]
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+
+  # Dashboard API
+  dashboard:
+    build: .
+    env_file: .env
+    command: ["core/cli.py", "dashboard", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  # Backtest runner (one-shot)
+  backtest:
+    build: .
+    env_file: .env
+    command: ["backtesting/backtest.py", "--days", "30"]
+    profiles: ["backtest"]
+    volumes:
+      - ./data:/app/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
