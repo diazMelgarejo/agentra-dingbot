@@ -1,10 +1,15 @@
-# 🤖 Agentic SuperBot v0.3.0
+# 🤖 agAIntra
+## agentic AI SuperBot Meta-Platform v0.3.0
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11+-green.svg)](https://python.org)
-[![Step](https://img.shields.io/badge/build-Step_2_Complete-brightgreen)](docs/ARCHITECTURE.md)
+> we are moving to oramasys 2.0 as againtra plugin
+> 
+> [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+> [![Python](https://img.shields.io/badge/python-3.11+-green.svg)](https://python.org)
+> [![Step](https://img.shields.io/badge/build-Step_2_Complete-brightgreen)](docs/ARCHITECTURE.md)
 
-**Multi-agent hybrid trading platform** — BTC/ETH spot via LangGraph + Polymarket 5-min prediction markets via fractional Kelly.
+---
+
+**Multi-agent hybrid trading platform** — BTC/ETH spot 5-min prediction markets via fractional Kelly.
 
 Merges two battle-tested X bot strategies:
 - **Strategy A** (@zostaff): MACD(3,15,3) + RSI(14)/VWAP + CVD order-flow divergence
