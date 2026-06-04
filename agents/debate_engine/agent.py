@@ -45,25 +45,35 @@ _JUDGE_SYSTEM = (
 
 
 async def run(state: Dict[str, Any]) -> Dict[str, Any]:
+    from core.config import get_settings
     symbol   = state.get("symbol", "BTC/USDT")
+    provider = get_settings().llm.provider
     evidence = _compile_evidence(state)
 
+    # ── Zero-key path: no LLM configured → deterministic heuristic judge ───────
+    if provider == "none":
+        sig, conf, reason = _heuristic_judge(state)
+        logger.info("debate_done", symbol=symbol, mode="heuristic",
+                    consensus=sig.value, confidence=f"{conf:.1%}")
+        return {
+            "bull_case":         f"[heuristic] weighted analyst vote → {sig.value}",
+            "bear_case":         f"[heuristic] {reason}",
+            "debate_consensus":  sig,
+            "debate_confidence": conf,
+        }
+
+    # ── LLM path: ollama (local) or openai (cloud) ─────────────────────────────
     try:
-        # Run bull and bear in parallel for speed
         bull_task = asyncio.create_task(_call_agent("bull", symbol, evidence))
         bear_task = asyncio.create_task(_call_agent("bear", symbol, evidence))
         bull_case, bear_case = await asyncio.gather(bull_task, bear_task)
-
         sig, conf, reason = await _judge(symbol, bull_case, bear_case)
-
     except Exception as exc:
-        logger.error("debate_failed", error=str(exc))
-        # Graceful fallback: use technical signal
-        tech = state.get("technical")
-        sig  = tech.signal     if tech else Signal.NEUTRAL
-        conf = tech.confidence if tech else 0.0
+        logger.warning("debate_llm_failed_using_heuristic", error=str(exc))
+        # Graceful fallback: deterministic heuristic judge (never stalls, no keys)
+        sig, conf, reason = _heuristic_judge(state)
         bull_case = bear_case = ""
-        reason = f"Debate failed ({exc}); using technical fallback"
+        reason = f"LLM unavailable ({exc}); heuristic judge → {reason}"
 
     logger.info("debate_done", symbol=symbol, consensus=sig.value, confidence=f"{conf:.1%}")
 
@@ -73,6 +83,70 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
         "debate_consensus":  sig,
         "debate_confidence": conf,
     }
+
+
+# ─── Zero-key heuristic judge ─────────────────────────────────────────────────
+
+# Numeric mapping for weighted voting across analysts.
+_SIGNAL_SCORE = {
+    Signal.STRONG_BUY:  2.0,
+    Signal.BUY:         1.0,
+    Signal.NEUTRAL:     0.0,
+    Signal.SELL:       -1.0,
+    Signal.STRONG_SELL:-2.0,
+}
+
+# Per-source weights — technical leads, ML and sentiment confirm, on-chain nudges.
+_SOURCE_WEIGHTS = {
+    "technical": 1.0,
+    "ml":        0.9,
+    "sentiment": 0.7,
+    "onchain":   0.5,
+}
+
+
+def _heuristic_judge(state: Dict[str, Any]) -> Tuple[Signal, float, str]:
+    """
+    Deterministic consensus from the analyst snapshots — no LLM, no API key.
+
+    Each analyst contributes (signal_score × its_confidence × source_weight).
+    The weighted average maps back to a Signal; |avg| scales confidence.
+    This is the default judge and also the universal fallback when an LLM
+    provider is configured but unreachable.
+    """
+    weighted_sum = 0.0
+    weight_total = 0.0
+    contributions = []
+
+    for key, weight in _SOURCE_WEIGHTS.items():
+        snap = state.get(key)
+        if snap is None:
+            continue
+        sig = getattr(snap, "signal", None)
+        conf = float(getattr(snap, "confidence", 0.0) or 0.0)
+        if sig is None:
+            continue
+        score = _SIGNAL_SCORE.get(sig, 0.0)
+        contribution = score * conf * weight
+        weighted_sum += contribution
+        weight_total += weight * conf
+        if conf > 0:
+            contributions.append(f"{key}={sig.value}@{conf:.2f}")
+
+    if weight_total == 0:
+        return Signal.NEUTRAL, 0.0, "no analyst signals available"
+
+    avg = weighted_sum / weight_total   # ∈ [-2, +2]
+
+    if   avg >=  1.3: consensus = Signal.STRONG_BUY
+    elif avg >=  0.4: consensus = Signal.BUY
+    elif avg <= -1.3: consensus = Signal.STRONG_SELL
+    elif avg <= -0.4: consensus = Signal.SELL
+    else:             consensus = Signal.NEUTRAL
+
+    confidence = min(abs(avg) / 2.0, 1.0)
+    reason = f"weighted vote ({', '.join(contributions) or 'all neutral'}) avg={avg:+.2f}"
+    return consensus, round(confidence, 4), reason
 
 
 # ─── Evidence compilation ─────────────────────────────────────────────────────

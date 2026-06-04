@@ -113,6 +113,7 @@ class TradeOrder:
     timestamp: datetime = field(default_factory=_utcnow)
     status: OrderStatus = OrderStatus.PENDING
     exchange_order_id: Optional[str] = None
+    routed_via: str = "homegrown"   # "homegrown" | "freqtrade"
 
 
 # ─── Polymarket-specific snapshots ────────────────────────────────────────────

@@ -20,7 +20,7 @@ class ExchangeConfig(BaseSettings):
 
 class LLMConfig(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
-    provider: str = Field("ollama", alias="LLM_PROVIDER")
+    provider: str = Field("none", alias="LLM_PROVIDER")   # none|ollama|openai — "none" uses the zero-key heuristic judge
     model: str = Field("llama3.1:8b", alias="LLM_MODEL")
     temperature: float = 0.1
     max_tokens: int = 4096
@@ -89,6 +89,19 @@ class MLConfig(BaseSettings):
     random_state: int = Field(42, alias="ML_RANDOM_STATE")
 
 
+
+class FreqTradeConfig(BaseSettings):
+    """Optional FreqTrade execution sidecar — auto-detected, never required."""
+    model_config = SettingsConfigDict(extra="ignore")
+    # "auto" = use it only if detected & reachable; "on" = require it; "off" = never use
+    mode: str = Field("auto", alias="FREQTRADE_MODE")
+    base_url: str = Field("http://localhost:8080", alias="FREQTRADE_URL")
+    username: str = Field("superbot", alias="FREQTRADE_USERNAME")
+    password: str = Field("superbot_password", alias="FREQTRADE_PASSWORD")
+    mcp_enabled: bool = Field(False, alias="FREQTRADE_MCP_ENABLED")
+    mcp_url: str = Field("http://localhost:8765", alias="FREQTRADE_MCP_URL")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
@@ -99,6 +112,7 @@ class Settings(BaseSettings):
     polymarket: PolymarketConfig = Field(default_factory=PolymarketConfig)
     alerts: AlertConfig = Field(default_factory=AlertConfig)
     ml: MLConfig = Field(default_factory=MLConfig)
+    freqtrade: FreqTradeConfig = Field(default_factory=FreqTradeConfig)
     db_path: str = Field("data/trades.db", alias="DB_PATH")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     debug: bool = False

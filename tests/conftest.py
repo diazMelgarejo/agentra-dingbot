@@ -108,7 +108,21 @@ def mock_funding_rate():
 
 
 @pytest.fixture
-def mock_debate_neutral():
+def _force_llm_path(monkeypatch):
+    """
+    Force the debate engine onto the LLM code path so that patching _call_agent
+    and _judge takes effect. (Default provider is now "none" → heuristic judge,
+    which would otherwise bypass these mocks.)
+    """
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    from core.config import get_settings
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+def mock_debate_neutral(_force_llm_path):
     """Stub out LLM debate to return NEUTRAL — deterministic for pipeline tests."""
     from core.state import Signal
     with patch("agents.debate_engine.agent._call_agent",
@@ -119,7 +133,7 @@ def mock_debate_neutral():
 
 
 @pytest.fixture
-def mock_debate_buy():
+def mock_debate_buy(_force_llm_path):
     from core.state import Signal
     with patch("agents.debate_engine.agent._call_agent",
                AsyncMock(return_value="Strong bullish case.")), \
@@ -129,7 +143,7 @@ def mock_debate_buy():
 
 
 @pytest.fixture
-def mock_debate_sell():
+def mock_debate_sell(_force_llm_path):
     from core.state import Signal
     with patch("agents.debate_engine.agent._call_agent",
                AsyncMock(return_value="Strong bearish case.")), \

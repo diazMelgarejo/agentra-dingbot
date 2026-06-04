@@ -36,10 +36,16 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
         status=OrderStatus.DRY_RUN,
     )
 
-    logger.info("spot_order_built", symbol=symbol, side=side, price=close,
-                sl=round(sl, 2), tp=round(tp, 2), dry_run=dry_run)
+    # Detect optional FreqTrade sidecar (used only if installed & reachable)
+    ft_used, ft_reason = await _maybe_freqtrade(order, side, dry_run)
+    order.routed_via = "freqtrade" if ft_used else "homegrown"
 
-    if not dry_run:
+    logger.info("spot_order_built", symbol=symbol, side=side, price=close,
+                sl=round(sl, 2), tp=round(tp, 2), dry_run=dry_run,
+                routed_via=order.routed_via, ft=ft_reason)
+
+    # Homegrown CCXT execution only when FreqTrade did NOT handle it and live
+    if not dry_run and not ft_used:
         order = await _place_spot_order(order)
 
     return {
@@ -47,6 +53,39 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
         "final_signal": consensus,
         "final_confidence": state.get("debate_confidence", 0.0),
     }
+
+
+async def _maybe_freqtrade(order: "TradeOrder", side: str, dry_run: bool):
+    """
+    If a FreqTrade sidecar is installed and reachable, route the entry through it.
+    Returns (used: bool, reason: str). Never raises — FreqTrade is fully optional.
+
+    In dry_run we still *detect* FreqTrade (so logs/dashboards show the routing
+    decision) but do not place a real force_entry.
+    """
+    try:
+        from core.config import get_settings
+        from agents.executor.freqtrade_client import FreqTradeClient
+        ftc = get_settings().freqtrade
+
+        use, reason = await FreqTradeClient.detect(
+            ftc.base_url, ftc.username, ftc.password, mode=ftc.mode
+        )
+        if not use:
+            return False, reason
+
+        if dry_run:
+            return True, f"{reason} (dry_run — no force_entry sent)"
+
+        client = FreqTradeClient(ftc.base_url, ftc.username, ftc.password)
+        ft_side = "long" if side == "buy" else "short"
+        resp = await client.force_entry(order.symbol, side=ft_side, price=order.price)
+        order.exchange_order_id = str(resp.get("trade_id") or resp.get("id") or "ft")
+        order.status = OrderStatus.PLACED
+        return True, f"force_entry sent ({reason})"
+    except Exception as exc:
+        logger.warning("freqtrade_route_failed_fallback_homegrown", error=str(exc))
+        return False, f"freqtrade error: {exc}"
 
 
 async def execute_polymarket_order(decision, dry_run: bool = True) -> Dict[str, Any]:
