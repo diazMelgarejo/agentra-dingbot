@@ -1,0 +1,8 @@
+{
+  "symbol": "ETH/USDT",
+  "backend": "sklearn_hgb",
+  "n_train_samples": 178,
+  "trained_at": "2026-06-03T12:06:28.220399+00:00",
+  "cycles_since_train": 29,
+  "horizon": 3
+}

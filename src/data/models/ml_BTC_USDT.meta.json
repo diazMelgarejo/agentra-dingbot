@@ -1,0 +1,8 @@
+{
+  "symbol": "BTC/USDT",
+  "backend": "sklearn_hgb",
+  "n_train_samples": 178,
+  "trained_at": "2026-06-04T20:11:24.672408+00:00",
+  "cycles_since_train": 37,
+  "horizon": 3
+}
