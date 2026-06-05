@@ -1,0 +1,24 @@
+# Cursor Rules — Agentra DingBot
+
+You are working on a Python multi-agent crypto trading bot.
+
+## Imports
+All source is in `src/`. pytest.ini adds it to PYTHONPATH.
+Import as: `from core.config import ...` (NOT `from src.core.config import ...`)
+
+## TDD
+Write failing tests BEFORE any implementation. No exceptions.
+
+## Critical patterns
+- LangGraph _wrap(): shallow dict ONLY (`{f.name: getattr(s, f.name) for f in fields(s)}`)
+- errors field: Annotated[List[str], operator.add] — never return full accumulated list
+- Routing: string keys "execute"/"skip" in add_conditional_edges
+- Kill switch: check KillSwitch.is_armed() before every order
+- Live gate: is_live_trading_enabled() must be True for any real order
+- FreqTrade: HTTP calls only, never import the package (GPL boundary)
+
+## Test file locations
+tests/test_step6_backtest.py — backtesting validation
+tests/test_step7_executor.py — executor safety
+tests/test_langgraph_pipeline.py — integration tests
+tests/test_ml_bridge.py — ML bridge
