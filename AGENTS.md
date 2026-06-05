@@ -170,7 +170,7 @@ See `docs/FUTURE_PLANS.md` for full spec. Key deliverables:
 | `docs/TRADINGVIEW_INTEGRATION.md` | Full TV integration guide |
 | `docs/ZERO_KEY_SETUP.md` | Run with no API keys |
 | `docs/LICENSE_RATIONALE.md` | Why Apache 2.0 + GPL boundary analysis |
-| `SPECS.md` | TDD behaviour contracts for all modules |
+| `docs/SPECS.md` | TDD behaviour contracts for all modules |
 
 ---
 

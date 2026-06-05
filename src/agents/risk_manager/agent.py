@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any, Dict
 import structlog
 from core.state import RiskAssessment, Signal
+from backtesting.polymarket_backtest import equity_circuit_breaker
 
 logger = structlog.get_logger(__name__)
 
@@ -32,6 +33,18 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
     sentiment = state.get("sentiment")
     if sentiment and getattr(sentiment, "vix_risk_level", "NORMAL") == "EXTREME":
         return _reject("VIX extreme — all trading halted")
+
+    # ── Equity-based daily circuit breaker ───────────────────────────────────────
+    # Uses EQUITY (NAV incl. open P&L), NOT balance — see LESSONS.md L-19
+    current_equity = float(state.get("equity", 0.0) or 0.0)
+    start_equity   = float(state.get("start_of_day_equity", 0.0) or 0.0)
+    if current_equity > 0 and start_equity > 0:
+        if equity_circuit_breaker(current_equity, start_equity,
+                                  settings.polymarket.daily_drawdown_limit_pct / 100.0):
+            return _reject(
+                f"Daily equity circuit breaker: equity dropped "
+                f"{(start_equity - current_equity)/start_equity:.1%} "
+                f"(limit {settings.polymarket.daily_drawdown_limit_pct:.0f}%)")
 
     # ── Standard spot risk gates ──────────────────────────────────────────────
     if consensus == Signal.NEUTRAL:

@@ -1,196 +1,215 @@
 """
-Walk-forward backtest on real historical 5-min BTC OHLCV data.
+src/backtesting/backtest.py  —  Step 6: Integrated Backtest Runner
+====================================================================
+Runs a complete backtesting pipeline:
+  1. Fetch real Binance OHLCV (free, no API key)
+  2. Generate SuperBot signals via LangGraph pipeline (or simple TA fallback)
+  3. Replay signals on OHLCV via signal_replay.py
+  4. Validate with Monte Carlo (P95 gate)
+  5. Walk-forward cross-validation (fold consistency gate)
 
-Usage:
-    python backtest.py --days 30
-    python backtest.py --days 60 --kelly 0.25
-
-Data source: Binance via ccxt (free, no API key needed for public OHLCV).
-Simulates 5-min Polymarket BTC Up/Down markets using actual price direction.
-
-Output:
-  - Console: Sharpe, Win Rate, Profit Factor, Max Drawdown, Trade Count
-  - equity_curve.png (matplotlib)
-  - backtest_trades.csv
+Usage
+-----
+    python src/backtesting/backtest.py --days 30
+    python src/backtesting/backtest.py --days 90 --sims 5000
 """
+from __future__ import annotations
+
 import argparse
 import asyncio
-import logging
+import json
+import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import structlog
 
-sys.path.insert(0, ".")
-from utils.data_fetchers import fetch_btc_ohlcv
-from strategies.technical_signals import generate_technical_signal
-from strategies.hybrid_decision import make_decision, fractional_kelly
-from deploy.paper_broker import PaperBroker
+_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_ROOT / "src"))
 
-logging.basicConfig(level="INFO", format="%(levelname)-8s %(message)s")
-logger = logging.getLogger("backtest")
+from backtesting.monte_carlo import run_monte_carlo, TradeResult
+from backtesting.signal_replay import SignalRecord, compute_metrics, replay_as_trades
+from backtesting.walk_forward import WalkForwardValidator
 
-SLIPPAGE = 0.002        # 0.2% slippage on entry
-MARKET_FEE = 0.0        # Polymarket 0% fee (currently)
-BANKROLL = 100.0        # starting USDC
+logger = structlog.get_logger("backtest")
 
 
-# ── Helper: simulate 5-min market outcome from OHLCV ─────────────────────────
-def simulate_market_outcome(df: pd.DataFrame, bar_idx: int, direction: str) -> float:
+# ── Data fetching ─────────────────────────────────────────────────────────────
+
+async def _fetch_ohlcv(symbol: str = "BTC/USDT", days: int = 30) -> pd.DataFrame:
+    """Fetch hourly OHLCV from Binance (public, no key)."""
+    from data.fetcher import fetch_ohlcv_multi_timeframe
+    dfs = await fetch_ohlcv_multi_timeframe(symbol, timeframes=["1h"], limit=days * 24)
+    df = dfs.get("1h")
+    if df is None or df.empty:
+        raise RuntimeError(f"No OHLCV data returned for {symbol}")
+    logger.info("ohlcv_loaded", symbol=symbol, bars=len(df))
+    return df
+
+
+# ── Simple signal generator (TA only, no LLM required) ───────────────────────
+
+def _generate_ta_signals(df: pd.DataFrame) -> list[SignalRecord]:
     """
-    Returns 1.0 if direction was correct (UP/DOWN vs actual next bar close),
-    else 0.0. Used to simulate Polymarket settlement.
+    Rule-based signal generator for backtesting (no LLM, no API key).
+    EMA 9/21 crossover + RSI filter:
+      BUY  when EMA9 crosses above EMA21 and RSI < 60
+      SELL when EMA9 crosses below EMA21 and RSI > 40
     """
-    if bar_idx + 1 >= len(df):
-        return 0.0
-    current = df["close"].iloc[bar_idx]
-    nxt     = df["close"].iloc[bar_idx + 1]
-    up = nxt >= current
-    if (direction == "YES" and up) or (direction == "NO" and not up):
-        return 1.0
-    return 0.0
+    df = df.copy()
+    df["ema9"]  = df["close"].ewm(span=9,  adjust=False).mean()
+    df["ema21"] = df["close"].ewm(span=21, adjust=False).mean()
+
+    delta = df["close"].diff()
+    gain  = delta.clip(lower=0).ewm(com=13, min_periods=14, adjust=False).mean()
+    loss  = (-delta.clip(upper=0)).ewm(com=13, min_periods=14, adjust=False).mean()
+    rs    = gain / loss.replace(0, np.nan)
+    df["rsi"] = 100 - (100 / (1 + rs))
+
+    # Crossover detection
+    df["ema_cross"] = (df["ema9"] > df["ema21"]).astype(int)
+    df["cross_up"]  = (df["ema_cross"] == 1) & (df["ema_cross"].shift(1) == 0)
+    df["cross_dn"]  = (df["ema_cross"] == 0) & (df["ema_cross"].shift(1) == 1)
+
+    records: list[SignalRecord] = []
+    for ts, row in df.iterrows():
+        if row["cross_up"] and row["rsi"] < 60:
+            records.append(SignalRecord(
+                signal="BUY", price=float(row["close"]),
+                timestamp=ts.isoformat(), confidence=0.65))
+        elif row["cross_dn"] and row["rsi"] > 40:
+            records.append(SignalRecord(
+                signal="SELL", price=float(row["close"]),
+                timestamp=ts.isoformat(), confidence=0.65))
+
+    logger.info("signals_generated", n=len(records),
+                buys=sum(1 for r in records if r.signal == "BUY"),
+                sells=sum(1 for r in records if r.signal == "SELL"))
+    return records
 
 
-# ── Walk-forward engine ────────────────────────────────────────────────────────
-async def run_backtest(days: int = 30, kelly_frac: float = 0.25) -> None:
-    limit = days * 24 * 12 + 100   # 5-min bars
-    logger.info(f"Fetching {days} days of 5-min BTC data (~{limit} bars)...")
-    df = await fetch_btc_ohlcv("5m", min(limit, 1500))
+# ── Walk-forward signal fn ────────────────────────────────────────────────────
 
-    if df.empty or len(df) < 100:
-        logger.error("Not enough data. Check network / ccxt Binance access.")
-        return
+def _wf_signal_fn(df_train: pd.DataFrame, df_test: pd.DataFrame) -> list[dict]:
+    """Walk-forward fold: generate signals on test data, replay, return trades."""
+    signals = _generate_ta_signals(df_test)
+    trades  = replay_as_trades(signals, df_test, slippage_pct=0.001, fee_pct=0.0004)
+    return [{"pnl_pct": t.pnl_pct, "signal": t.signal} for t in trades]
 
-    logger.info(f"Got {len(df)} bars: {df.index[0]} → {df.index[-1]}")
 
-    broker = PaperBroker()
-    equity = [BANKROLL]
-    bankroll = BANKROLL
-    trades = []
+# ── Main backtest pipeline ────────────────────────────────────────────────────
 
-    WARMUP = 50   # bars needed for indicators
+async def run_backtest(
+    symbol: str = "BTC/USDT",
+    days:   int = 30,
+    n_sims: int = 1000,
+    capital: float = 1000.0,
+    max_p95_dd: float = 0.30,
+    save_signals: bool = False,
+) -> dict:
+    """
+    Full Step 6 backtest pipeline.
+    Returns a result dict with all metrics and gate decisions.
+    """
+    # 1. Data
+    df = await _fetch_ohlcv(symbol, days)
 
-    # Walk-forward: train on rolling 50-bar window, test on next bar
-    for i in range(WARMUP, len(df) - 1):
-        window = df.iloc[max(0, i - 100):i]   # rolling 100-bar window
+    # 2. Signals
+    signals = _generate_ta_signals(df)
+    if save_signals:
+        from backtesting.signal_replay import save_signals as save_fn
+        path = str(_ROOT / "data" / "backtest_signals.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        save_fn(signals, path)
+        logger.info("signals_saved", path=path)
 
-        # ── Run strategy signals ────────────────────────────────────────────
-        tech_sig = generate_technical_signal(window)
-        if tech_sig.direction == "NEUTRAL":
-            equity.append(equity[-1])
-            continue
-
-        # Simplified fear signal for backtest (no live API calls)
-        class MockFear:
-            regime = "NEUTRAL"
-            fg_value = 50
-            vix = 20.0
-            micro_impulse = "NEUTRAL"
-            vix_risk_level = "NORMAL"
-            size_multiplier = 1.0
-
-        yes_price = 0.50 + (np.random.randn() * 0.03)  # simulate market price ≈ 50%
-        yes_price = max(0.40, min(0.60, yes_price))
-
-        decision = make_decision(tech_sig, MockFear(), yes_price, bankroll=bankroll)
-        if not decision.should_trade:
-            equity.append(equity[-1])
-            continue
-
-        # ── Simulate trade ─────────────────────────────────────────────────
-        size = max(1.0, min(decision.position_usdc, bankroll * 0.20))
-        fill_price = yes_price * (1 + SLIPPAGE if decision.direction == "YES" else 1 - SLIPPAGE)
-        fill_price = max(0.01, min(0.99, fill_price))
-        shares = size / fill_price
-
-        outcome = simulate_market_outcome(df, i, decision.direction)
-        payout = shares * outcome
-        pnl = payout - size
-        bankroll += pnl
-
-        trade = {
-            "bar": i,
-            "timestamp": str(df.index[i]),
-            "direction": decision.direction,
-            "entry_price": round(fill_price, 4),
-            "size_usdc": round(size, 4),
-            "outcome": "WIN" if outcome == 1.0 else "LOSS",
-            "pnl_usdc": round(pnl, 4),
-            "bankroll": round(bankroll, 4),
-            "edge_pct": round(decision.edge_pct, 2),
-            "tech": tech_sig.direction,
-            "confidence": round(tech_sig.confidence, 3),
-        }
-        trades.append(trade)
-        equity.append(bankroll)
-
-    # ── Metrics ───────────────────────────────────────────────────────────────
+    # 3. Signal replay → trades
+    trades = replay_as_trades(signals, df, slippage_pct=0.001, fee_pct=0.0004)
     if not trades:
-        logger.warning("No trades generated. Try lowering MIN_EDGE_PCT in .env")
-        return
+        logger.warning("no_trades_generated")
+        return {"status": "no_trades", "n_trades": 0}
 
-    df_trades = pd.DataFrame(trades)
-    wins = df_trades[df_trades["outcome"] == "WIN"]
-    losses = df_trades[df_trades["outcome"] == "LOSS"]
+    # 4. Summary metrics
+    metrics = compute_metrics(trades)
 
-    win_rate = len(wins) / len(df_trades) * 100
-    total_pnl = df_trades["pnl_usdc"].sum()
-    gross_profit = wins["pnl_usdc"].sum()
-    gross_loss   = abs(losses["pnl_usdc"].sum())
-    profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
+    # 5. Monte Carlo validation (P95 gate)
+    mc_trades = [TradeResult(pnl_pct=t.pnl_pct, signal=t.signal) for t in trades]
+    mc_report = run_monte_carlo(mc_trades, n_sims=n_sims, capital=capital, seed=42)
+    mc_pass, mc_reason = mc_report.passes_gate(max_p95_dd=max_p95_dd)
 
-    equity_arr = np.array(equity)
-    returns = np.diff(equity_arr) / equity_arr[:-1]
-    sharpe = (returns.mean() / returns.std() * np.sqrt(252 * 24 * 12)
-              if returns.std() > 0 else 0.0)
+    # 6. Walk-forward validation
+    wfv = WalkForwardValidator(train_bars=200, test_bars=50, embargo_bars=10)
+    wf_folds = wfv.run(df, _wf_signal_fn)
+    wf_report = wfv.report(wf_folds)
+    wf_pass, wf_reason = wf_report.passes_gate()
 
-    peak = equity_arr[0]
-    max_dd = 0.0
-    for e in equity_arr:
-        peak = max(peak, e)
-        dd = (peak - e) / peak * 100
-        max_dd = max(max_dd, dd)
+    result = {
+        "status":          "pass" if (mc_pass and wf_pass) else "fail",
+        "symbol":          symbol,
+        "days":            days,
+        "n_signals":       len(signals),
+        "n_trades":        metrics.n_trades,
+        "win_rate":        round(metrics.win_rate, 4),
+        "sharpe":          round(metrics.sharpe, 3),
+        "profit_factor":   round(metrics.profit_factor, 3),
+        "max_dd":          round(metrics.max_dd, 4),
+        "total_pnl_pct":   round(metrics.total_pnl_pct, 4),
+        "mc_p50_dd":       round(mc_report.p50_max_dd, 4),
+        "mc_p95_dd":       round(mc_report.p95_max_dd, 4),   # ← size capital here
+        "mc_p95_ratio":    round(mc_report.p95_max_dd / max(mc_report.p50_max_dd, 0.001), 2),
+        "mc_prob_profit":  round(mc_report.prob_profit, 4),
+        "mc_pass":         mc_pass,
+        "mc_reason":       mc_reason,
+        "wf_n_folds":      wf_report.n_folds,
+        "wf_consistent":   round(wf_report.consistent_folds_pct, 2),
+        "wf_median_sharpe":round(wf_report.median_sharpe, 3),
+        "wf_pass":         wf_pass,
+        "wf_reason":       wf_reason,
+    }
+    return result
 
-    print("
-" + "="*60)
-    print("BACKTEST RESULTS")
-    print("="*60)
-    print(f"Period       : {days} days")
-    print(f"Bars         : {len(df)}")
-    print(f"Total Trades : {len(df_trades)}")
-    print(f"Win Rate     : {win_rate:.1f}%")
-    print(f"Profit Factor: {profit_factor:.2f}")
-    print(f"Sharpe Ratio : {sharpe:.2f}")
-    print(f"Max Drawdown : {max_dd:.2f}%")
-    print(f"Net P&L      : ${total_pnl:+.2f} ({total_pnl/BANKROLL*100:+.1f}%)")
-    print(f"Final Bankroll: ${bankroll:.2f}")
-    print("="*60)
 
-    # ── Save CSV ──────────────────────────────────────────────────────────────
-    os.makedirs("data", exist_ok=True)
-    df_trades.to_csv("data/backtest_trades.csv", index=False)
-    logger.info("Saved: data/backtest_trades.csv")
-
-    # ── Equity curve plot ──────────────────────────────────────────────────────
-    plt.figure(figsize=(12, 5))
-    plt.plot(equity_arr, label="Equity", color="#00c8ff", linewidth=1.5)
-    plt.axhline(y=BANKROLL, color="gray", linestyle="--", alpha=0.5, label="Start")
-    plt.title(f"Hybrid SuperBot — {days}d Equity Curve | Sharpe {sharpe:.2f} | DD {max_dd:.1f}%")
-    plt.xlabel("Bar")
-    plt.ylabel("USDC")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig("data/equity_curve.png", dpi=150)
-    logger.info("Saved: data/equity_curve.png")
-    plt.close()
+def _print_report(r: dict) -> None:
+    print(f"\n{'='*60}")
+    print(f"BACKTEST REPORT — {r['symbol']}  ({r['days']} days)")
+    print(f"{'='*60}")
+    print(f"  Trades:        {r['n_trades']}  (from {r['n_signals']} signals)")
+    print(f"  Win rate:      {r['win_rate']:.1%}")
+    print(f"  Sharpe:        {r['sharpe']:.2f}")
+    print(f"  Profit factor: {r['profit_factor']:.2f}")
+    print(f"  Backtest DD:   {r['max_dd']:.1%}")
+    print()
+    print(f"  Monte Carlo ({r.get('mc_n_sims', 1000):,} sims)")
+    print(f"    P50 DD:  {r['mc_p50_dd']:.1%}")
+    print(f"    P95 DD:  {r['mc_p95_dd']:.1%}  ← fund capital against this")
+    print(f"    P95/P50: {r['mc_p95_ratio']:.2f}×  (expected: 1.5–3×)")
+    print(f"    Prob profit: {r['mc_prob_profit']:.1%}")
+    print(f"    Gate:    {'✅ PASS' if r['mc_pass'] else '❌ FAIL'} — {r['mc_reason']}")
+    print()
+    print(f"  Walk-Forward ({r['wf_n_folds']} folds)")
+    print(f"    Consistent:    {r['wf_consistent']:.0%}")
+    print(f"    Median Sharpe: {r['wf_median_sharpe']:.2f}")
+    print(f"    Gate:          {'✅ PASS' if r['wf_pass'] else '❌ FAIL'} — {r['wf_reason']}")
+    print()
+    print(f"  OVERALL: {'✅ PASS — proceed to dry-run' if r['status']=='pass' else '❌ FAIL — do not go live'}")
+    print(f"{'='*60}\n")
 
 
 if __name__ == "__main__":
-    import os
     parser = argparse.ArgumentParser()
-    parser.add_argument("--days",  type=int,   default=30,   help="Lookback days")
-    parser.add_argument("--kelly", type=float, default=0.25, help="Kelly fraction")
+    parser.add_argument("--symbol",  default="BTC/USDT")
+    parser.add_argument("--days",    type=int, default=30)
+    parser.add_argument("--sims",    type=int, default=1000)
+    parser.add_argument("--capital", type=float, default=1000.0)
+    parser.add_argument("--save-signals", action="store_true")
     args = parser.parse_args()
-    asyncio.run(run_backtest(days=args.days, kelly_frac=args.kelly))
+
+    result = asyncio.run(run_backtest(
+        symbol=args.symbol, days=args.days,
+        n_sims=args.sims, capital=args.capital,
+        save_signals=args.save_signals,
+    ))
+    _print_report(result)

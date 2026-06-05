@@ -1,4 +1,6 @@
-.PHONY: install dev test coverage lint backtest paper freqtrade-start freqtrade-stop clean
+.PHONY: install dev test coverage lint backtest paper dashboard \
+        freqtrade-start freqtrade-stop freqtrade-backtest \
+        freqtrade-lookahead freqtrade-recursive clean
 
 # ── Install ────────────────────────────────────────────────────────────────────
 install:
@@ -7,7 +9,7 @@ install:
 dev:
 	pip install -r requirements.txt && pip install -e ".[dev]"
 
-# ── Test (TDD) ─────────────────────────────────────────────────────────────────
+# ── Test (TDD — RED/GREEN/REFACTOR cycle) ─────────────────────────────────────
 test:
 	python -m pytest tests/
 
@@ -15,10 +17,6 @@ test:
 coverage:
 	python -m pytest tests/ --cov=src --cov-report=term-missing \
 	  --cov-fail-under=80
-
-# RED phase helper: run only the new failing tests
-red:
-	python -m pytest tests/$(FILE) -v --tb=short
 
 # ── Lint ───────────────────────────────────────────────────────────────────────
 lint:
@@ -35,13 +33,18 @@ paper:
 dashboard:
 	PYTHONPATH=src LLM_PROVIDER=none python src/dashboard/app.py
 
-# ── Backtest & MC ──────────────────────────────────────────────────────────────
+# ── Step 6: Backtest + Monte Carlo ────────────────────────────────────────────
 backtest:
-	PYTHONPATH=src python src/backtesting/backtest.py --days 30
+	PYTHONPATH=src python src/backtesting/backtest.py --days 30 --sims 1000
+
+backtest-full:
+	PYTHONPATH=src python src/backtesting/backtest.py --days 90 --sims 5000 \
+	  --save-signals
 
 monte-carlo:
 	PYTHONPATH=src python src/backtesting/monte_carlo.py \
-	  --trades data/signals.json --sims 5000 --capital 1000 --p95-dd-gate 0.30
+	  --trades data/backtest_signals.json --sims 5000 --capital 1000 \
+	  --p95-dd-gate 0.30
 
 # ── FreqTrade optional sidecar ─────────────────────────────────────────────────
 FT_VENV  = $(HOME)/.venvs/freqtrade
@@ -55,6 +58,28 @@ freqtrade-start:
 
 freqtrade-stop:
 	pkill -f "freqtrade trade" || true
+
+freqtrade-backtest:
+	$(FT_VENV)/bin/freqtrade backtesting \
+	  --config $(FT_CFG) --strategy SuperBotFollower \
+	  --userdir $(FT_DATA)/user_data \
+	  --timerange 20240901-20241201 \
+	  --export trades
+
+# ── Step 6: FreqTrade anti-bias CI gates (from research — RUN BEFORE DRY-RUN) ─
+freqtrade-lookahead:
+	@echo "=== Lookahead Analysis (detects future-data leakage) ==="
+	$(FT_VENV)/bin/freqtrade lookahead-analysis \
+	  --config $(FT_CFG) --strategy SuperBotFollower \
+	  --userdir $(FT_DATA)/user_data \
+	  --timerange 20240901-20241201
+
+freqtrade-recursive:
+	@echo "=== Recursive Analysis (detects indicator instability) ==="
+	$(FT_VENV)/bin/freqtrade recursive-analysis \
+	  --config $(FT_CFG) --strategy SuperBotFollower \
+	  --userdir $(FT_DATA)/user_data \
+	  --startup-candle 199 299 399 499
 
 # ── Clean ──────────────────────────────────────────────────────────────────────
 clean:
