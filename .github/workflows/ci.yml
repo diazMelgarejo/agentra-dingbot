@@ -24,7 +24,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install TA-Lib system dependency
-        run: sudo apt-get install -y libta-lib-dev
+        run: sudo apt-get update && sudo apt-get install -y libta-lib-dev
 
       - name: Install dependencies
         run: |
