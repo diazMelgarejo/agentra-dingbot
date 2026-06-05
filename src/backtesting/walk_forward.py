@@ -198,11 +198,8 @@ class WalkForwardValidator:
     def report(self, folds: List[WalkForwardFold]) -> WalkForwardReport:
         if not folds:
             return WalkForwardReport(folds=[], n_folds=0, data_months=0.0)
-        total_bars = sum(
-            len(range(f.test_start, f.test_end))
-            for f in folds
-            if hasattr(f, "test_start") and hasattr(f, "test_end")
-        ) or (len(folds) * self.test_bars)
+        # Use test_bars count × folds (timestamps are not integers)
+        total_bars = len(folds) * self.test_bars
         return WalkForwardReport(
             folds=folds,
             n_folds=len(folds),

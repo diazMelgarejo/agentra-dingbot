@@ -8,6 +8,46 @@ from typing import Any, Dict
 import structlog
 from core.state import OrderStatus, Signal, TradeOrder
 
+
+import asyncio as _asyncio
+import ccxt
+
+_MAX_RETRIES = 3
+_RETRY_ERRORS = (ccxt.RateLimitExceeded, ccxt.DDoSProtection,
+                 ccxt.RequestTimeout, ccxt.ExchangeNotAvailable)
+_FATAL_ERRORS = (ccxt.AuthenticationError, ccxt.PermissionDenied)
+
+async def _place_spot_order_safe(order):
+    """Wrap _place_spot_order with retry logic and kill-switch check."""
+    from agents.executor.safety import KillSwitch, is_live_trading_enabled
+    ks = KillSwitch()
+    if ks.is_armed():
+        logger.critical("executor_halted_kill_switch")
+        return None
+
+    last_exc = None
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            return await _place_spot_order(order)
+        except _FATAL_ERRORS as exc:
+            logger.critical("executor_fatal_error_no_retry",
+                            error=str(exc), type=type(exc).__name__)
+            return None
+        except ccxt.InsufficientFunds as exc:
+            logger.warning("executor_insufficient_funds", error=str(exc))
+            return None
+        except _RETRY_ERRORS as exc:
+            last_exc = exc
+            wait = 2 ** attempt
+            logger.warning("executor_retry", attempt=attempt,
+                           max=_MAX_RETRIES, error=str(exc), wait=wait)
+            if attempt < _MAX_RETRIES:
+                await _asyncio.sleep(wait)
+        except Exception as exc:
+            logger.error("executor_unexpected_error", error=str(exc))
+            return None
+    logger.error("executor_max_retries_exhausted", error=str(last_exc))
+    return None
 logger = structlog.get_logger(__name__)
 
 
