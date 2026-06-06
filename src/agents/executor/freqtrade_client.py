@@ -123,7 +123,7 @@ class FreqTradeClient:
 
     async def _request(self, method: str, path: str,
                        payload: dict | None = None,
-                       timeout: float = 10.0) -> dict[str, Any]:
+                       timeout: float = 10.0) -> Any:
         import aiohttp
         auth = aiohttp.BasicAuth(self.username, self.password)
         async with aiohttp.ClientSession(auth=auth) as s:

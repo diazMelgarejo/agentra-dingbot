@@ -113,13 +113,13 @@ class Settings(BaseSettings):
     # monkeypatch.setenv + get_settings.cache_clear().
     # (Using XConfig() as a static default captures env vars at module-import time,
     # meaning monkeypatched env vars are never seen by re-instantiated settings.)
-    exchange: ExchangeConfig = Field(default_factory=lambda: ExchangeConfig())
-    llm: LLMConfig = Field(default_factory=lambda: LLMConfig())
-    trading: TradingConfig = Field(default_factory=lambda: TradingConfig())
-    polymarket: PolymarketConfig = Field(default_factory=lambda: PolymarketConfig())
-    alerts: AlertConfig = Field(default_factory=lambda: AlertConfig())
-    ml: MLConfig = Field(default_factory=lambda: MLConfig())
-    freqtrade: FreqTradeConfig = Field(default_factory=lambda: FreqTradeConfig())
+    exchange: ExchangeConfig = Field(default_factory=lambda: ExchangeConfig())  # type: ignore[call-arg]
+    llm: LLMConfig = Field(default_factory=lambda: LLMConfig())  # type: ignore[call-arg]
+    trading: TradingConfig = Field(default_factory=lambda: TradingConfig())  # type: ignore[call-arg]
+    polymarket: PolymarketConfig = Field(default_factory=lambda: PolymarketConfig())  # type: ignore[call-arg]
+    alerts: AlertConfig = Field(default_factory=lambda: AlertConfig())  # type: ignore[call-arg]
+    ml: MLConfig = Field(default_factory=lambda: MLConfig())  # type: ignore[call-arg]
+    freqtrade: FreqTradeConfig = Field(default_factory=lambda: FreqTradeConfig())  # type: ignore[call-arg]
     db_path: str = Field("data/trades.db", alias="DB_PATH")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     debug: bool = False

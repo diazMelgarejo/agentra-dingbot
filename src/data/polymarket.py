@@ -42,7 +42,7 @@ async def _http_session():
 
 async def fetch_btc_eth_markets(
     session: aiohttp.ClientSession,
-    tags: list[str] = None,
+    tags: list[str] | None = None,
     limit: int = 100,
 ) -> list[PolymarketMarket]:
     """
@@ -52,7 +52,7 @@ async def fetch_btc_eth_markets(
     if tags is None:
         tags = ["crypto"]
 
-    params = {"active": "true", "closed": "false", "limit": limit}
+    params: dict[str, Any] = {"active": "true", "closed": "false", "limit": limit}
     markets: list[PolymarketMarket] = []
 
     for tag in tags:
