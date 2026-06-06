@@ -30,6 +30,11 @@ all = ["agentic-superbot[dev,db]"]
 [tool.pytest.ini_options]
 testpaths  = ["tests"]
 asyncio_mode = "auto"
+# Explicit function-scoped event loops (pytest-asyncio 0.24+ requirement).
+# Without this, the default is "session" scope which causes RuntimeError when
+# a sync test calls asyncio.run() — it creates+closes its own loop, leaving the
+# session-shared loop in a broken state for subsequent async tests.
+asyncio_default_fixture_loop_scope = "function"
 addopts    = "-q"
 
 [tool.ruff]

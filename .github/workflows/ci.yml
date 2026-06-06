@@ -48,7 +48,11 @@ jobs:
         run: ruff check src tests
 
       - name: Run MyPy (type-check)
-        run: mypy src --ignore-missing-imports --explicit-package-bases
+        # --python-version 3.12: target stdlib for datetime.UTC, StrEnum, etc.
+        # Without this flag, mypy uses the installed interpreter's stdlib (may be 3.9
+        # on macOS, causing false errors for 3.11+ additions). CI interpreter is 3.12,
+        # but the flag makes it explicit and reproducible locally too.
+        run: mypy src --ignore-missing-imports --explicit-package-bases --python-version 3.12
 
   security-scan:
     runs-on: ubuntu-latest
@@ -59,7 +63,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install security tools
         run: python -m pip install pip-audit safety

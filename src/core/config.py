@@ -108,13 +108,18 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore", populate_by_name=True
     )
-    exchange: ExchangeConfig = ExchangeConfig()
-    llm: LLMConfig = LLMConfig()
-    trading: TradingConfig = TradingConfig()
-    polymarket: PolymarketConfig = PolymarketConfig()
-    alerts: AlertConfig = AlertConfig()
-    ml: MLConfig = MLConfig()
-    freqtrade: FreqTradeConfig = FreqTradeConfig()
+    # Use lambda factories so each Settings() instantiation creates a fresh nested
+    # config that reads the CURRENT environment — critical for test isolation via
+    # monkeypatch.setenv + get_settings.cache_clear().
+    # (Using XConfig() as a static default captures env vars at module-import time,
+    # meaning monkeypatched env vars are never seen by re-instantiated settings.)
+    exchange: ExchangeConfig = Field(default_factory=lambda: ExchangeConfig())
+    llm: LLMConfig = Field(default_factory=lambda: LLMConfig())
+    trading: TradingConfig = Field(default_factory=lambda: TradingConfig())
+    polymarket: PolymarketConfig = Field(default_factory=lambda: PolymarketConfig())
+    alerts: AlertConfig = Field(default_factory=lambda: AlertConfig())
+    ml: MLConfig = Field(default_factory=lambda: MLConfig())
+    freqtrade: FreqTradeConfig = Field(default_factory=lambda: FreqTradeConfig())
     db_path: str = Field("data/trades.db", alias="DB_PATH")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     debug: bool = False
