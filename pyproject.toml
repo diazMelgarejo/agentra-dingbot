@@ -7,14 +7,13 @@ name = "agentic-superbot"
 version = "0.3.0"
 description = "Multi-agent BTC/ETH + Polymarket hybrid trading platform"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 authors = [{name = "Agentic SuperBot Contributors"}]
 keywords = ["trading", "crypto", "polymarket", "langgraph", "agents", "bitcoin"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Office/Business :: Financial",
 ]
@@ -31,15 +30,25 @@ all = ["agentic-superbot[dev,db]"]
 [tool.pytest.ini_options]
 testpaths  = ["tests"]
 asyncio_mode = "auto"
+# Explicit function-scoped event loops (pytest-asyncio 0.24+ requirement).
+# Without this, the default is "session" scope which causes RuntimeError when
+# a sync test calls asyncio.run() — it creates+closes its own loop, leaving the
+# session-shared loop in a broken state for subsequent async tests.
+asyncio_default_fixture_loop_scope = "function"
 addopts    = "-q"
 
 [tool.ruff]
 line-length    = 100
-target-version = "py311"
+# oramasys v2 upgrade horizon: Python 3.12+ only.
+# UP035 (deprecated typing aliases) and related were auto-fixed in this PR.
+# E701/E702 (compound statements) are tracked for a dedicated cleanup pass.
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E","F","I","UP","B","SIM"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

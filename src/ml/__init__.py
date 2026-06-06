@@ -8,10 +8,10 @@ Self-contained ML directional-signal layer feeding the LangGraph pipeline.
   model.py          — MLSignalModel: LightGBM → sklearn HistGBM → heuristic fallback
   freqai_bridge.py  — lifecycle: adaptive retraining, persistence, generate_ml_signal()
 """
-from ml.features      import build_features, latest_feature_row, FEATURE_COLUMNS
-from ml.labels        import make_labels, align_xy
-from ml.model         import MLSignalModel
+from ml.features import FEATURE_COLUMNS, build_features, latest_feature_row
 from ml.freqai_bridge import FreqAIBridge, clear_model_cache
+from ml.labels import align_xy, make_labels
+from ml.model import MLSignalModel
 
 __all__ = [
     "build_features", "latest_feature_row", "FEATURE_COLUMNS",

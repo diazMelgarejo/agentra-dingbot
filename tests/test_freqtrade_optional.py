@@ -17,16 +17,20 @@ Two concerns:
 """
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from core.state import (
-    IndicatorSnapshot, MLSnapshot, OnChainSnapshot, RiskAssessment,
-    SentimentSnapshot, Signal, Timeframe, TradingState,
+    IndicatorSnapshot,
+    MLSnapshot,
+    OnChainSnapshot,
+    RiskAssessment,
+    SentimentSnapshot,
+    Signal,
+    Timeframe,
+    TradingState,
 )
-
 
 # ── A. FreqTrade detection ──────────────────────────────────────────────────────
 

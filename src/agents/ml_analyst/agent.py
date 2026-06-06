@@ -12,28 +12,28 @@ Contract (same shallow-dict convention as every other agent):
 Safety:
   * Training is CPU-bound → executed in a thread pool so the asyncio event
     loop never blocks.
-  * Any failure is caught and degrades to no-signal; an exception must never
+  * Any failure is caught and degrades to no-signal
+  an exception must never
     propagate to the LangGraph runner (which would abort the whole graph).
 """
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
-from core.state import MLSnapshot, Signal
+from core.state import MLSnapshot
 
 logger = structlog.get_logger(__name__)
 
 
-async def run(state: Dict[str, Any]) -> Dict[str, Any]:
+async def run(state: dict[str, Any]) -> dict[str, Any]:
     from core.config import get_settings
 
     symbol = state.get("symbol", "BTC/USDT")
     ohlcv = state.get("ohlcv", {})
-    new_errors = []
 
     cfg = get_settings().ml
     if not cfg.enabled:
@@ -59,13 +59,14 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
         sig, conf, prob_up, meta = await asyncio.get_event_loop().run_in_executor(
             None, _run_bridge, df, symbol
         )
-    except Exception as exc:  # absolute backstop — never break the graph
+    except Exception as exc:
+        # absolute backstop — never break the graph
         logger.error("ml_agent_failed", error=str(exc))
         return {"ml": None, "errors": [f"ml_analyst: {exc}"]}
 
     snap = MLSnapshot(
         symbol=symbol,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         prob_up=prob_up,
         signal=sig,
         confidence=conf,

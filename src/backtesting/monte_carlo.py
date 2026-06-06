@@ -3,12 +3,15 @@ backtesting/monte_carlo.py  —  Step 6: Monte Carlo Validation Engine
 ======================================================================
 Corrected after research: reports P50 AND P95 drawdown distributions.
 Size capital against P95 (research shows it runs 1.5-3x the backtest figure).
-5,000 simulations minimum; block bootstrap preserves autocorrelation.
+5,000 simulations minimum
+block bootstrap preserves autocorrelation.
 """
 from __future__ import annotations
+
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import List, Optional, Sequence, Tuple
+
 import numpy as np
 import structlog
 
@@ -53,7 +56,7 @@ class MCReport:
 
     def passes_gate(self,
                     max_p95_dd: float = 0.30,
-                    min_prob_profit: float = 0.55) -> Tuple[bool, str]:
+                    min_prob_profit: float = 0.55) -> tuple[bool, str]:
         if self.p95_max_dd > max_p95_dd:
             return False, f"P95 DD {self.p95_max_dd:.1%} > tolerance {max_p95_dd:.1%}"
         if self.prob_profit < min_prob_profit:
@@ -66,7 +69,7 @@ def run_monte_carlo(
     n_sims: int = 5000,
     capital: float = 1000.0,
     block_size: int = 10,
-    seed: Optional[int] = None,
+    seed: int | None = None,
     ruin_threshold: float = 0.20,
 ) -> MCReport:
     """Block-bootstrap Monte Carlo on completed trade records."""
@@ -114,18 +117,37 @@ def run_monte_carlo(
 
 
 def _empty(n_sims, n_trades, capital) -> MCReport:
-    return MCReport(n_sims, n_trades, capital, *([capital]*3), 0.0, *([0.0]*8))
+    return MCReport(
+        n_sims=n_sims,
+        n_trades=n_trades,
+        capital=capital,
+        median_final_equity=capital,
+        p5_final_equity=capital,
+        p95_final_equity=capital,
+        prob_profit=0.0,
+        median_max_dd=0.0,
+        p50_max_dd=0.0,
+        p95_max_dd=0.0,
+        p99_max_dd=0.0,
+        median_sharpe=0.0,
+        p5_sharpe=0.0,
+        p95_sharpe=0.0,
+        ruin_probability=0.0,
+    )
 
 
 def main():
-    import argparse, json, sys
+    import argparse
+    import json
+    import sys
     p = argparse.ArgumentParser()
     p.add_argument("--trades", required=True)
     p.add_argument("--sims", type=int, default=5000)
     p.add_argument("--capital", type=float, default=1000.0)
     p.add_argument("--p95-dd-gate", type=float, default=0.30)
     args = p.parse_args()
-    raw = json.load(open(args.trades))
+    with open(args.trades) as _f:
+        raw = json.load(_f)
     trades = [TradeResult(**t) for t in raw]
     r = run_monte_carlo(trades, args.sims, args.capital)
     print(r.summary())

@@ -62,8 +62,8 @@ sudo apt install libta-lib-dev # Ubuntu/Debian
 ### Install
 
 ```bash
-git clone https://github.com/yourusername/agentic-superbot.git
-cd agentic-superbot
+git clone https://github.com/diazMelgarejo/agentra-dingbot.git
+cd agentra-dingbot
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
@@ -73,8 +73,8 @@ cp .env.example .env
 ### Backtest (no API keys needed)
 
 ```bash
-python backtesting/backtest.py --days 30
-python backtesting/monte_carlo.py --simulations 5000
+python -m src.backtesting.backtest --days 30
+python -m src.backtesting.monte_carlo --simulations 5000
 ```
 
 ### Paper Trade (Polymarket)
@@ -86,14 +86,16 @@ python deploy/live.py --paper
 ### Run Spot Cycle (dry-run)
 
 ```bash
-superbot run --symbol BTC/USDT
+python -m src.core.cli run --symbol BTC/USDT
 ```
 
 ### Tests
 
 ```bash
-pytest                          # all tests
-pytest tests/test_data_ingestion.py -v   # Step 2 data layer only
+pytest --cov=src --cov-report=term-missing --ignore=tests/live   # all tests
+pytest tests/test_data_ingestion.py -v                           # Step 2 data layer only
+ruff check src tests                                             # lint
+mypy src --ignore-missing-imports                                # type-check
 ```
 
 ### Dashboard

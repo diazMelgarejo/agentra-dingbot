@@ -1,11 +1,10 @@
 """Telegram notification helper (non-blocking)."""
 from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Optional
 
 import httpx
-
 from config.settings import settings
 
 logger = logging.getLogger(__name__)

@@ -4,13 +4,14 @@ Handles BOTH spot CCXT execution (BTC/ETH) AND Polymarket CLOB execution.
 dry_run=True (default) — never places real orders without explicit --live flag.
 """
 from __future__ import annotations
-from typing import Any, Dict
-import structlog
-from core.state import OrderStatus, Signal, TradeOrder
-
 
 import asyncio as _asyncio
+from typing import Any
+
 import ccxt
+import structlog
+
+from core.state import OrderStatus, Signal, TradeOrder
 
 _MAX_RETRIES = 3
 _RETRY_ERRORS = (ccxt.RateLimitExceeded, ccxt.DDoSProtection,
@@ -19,7 +20,7 @@ _FATAL_ERRORS = (ccxt.AuthenticationError, ccxt.PermissionDenied)
 
 async def _place_spot_order_safe(order):
     """Wrap _place_spot_order with retry logic and kill-switch check."""
-    from agents.executor.safety import KillSwitch, is_live_trading_enabled
+    from agents.executor.safety import KillSwitch
     ks = KillSwitch()
     if ks.is_armed():
         logger.critical("executor_halted_kill_switch")
@@ -51,7 +52,7 @@ async def _place_spot_order_safe(order):
 logger = structlog.get_logger(__name__)
 
 
-async def run(state: Dict[str, Any]) -> Dict[str, Any]:
+async def run(state: dict[str, Any]) -> dict[str, Any]:
     """Execute spot trade (from LangGraph pipeline). Polymarket execution is handled separately."""
     risk    = state.get("risk")
     consensus = state.get("debate_consensus", Signal.NEUTRAL)
@@ -95,7 +96,7 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def _maybe_freqtrade(order: "TradeOrder", side: str, dry_run: bool):
+async def _maybe_freqtrade(order: TradeOrder, side: str, dry_run: bool):
     """
     If a FreqTrade sidecar is installed and reachable, route the entry through it.
     Returns (used: bool, reason: str). Never raises — FreqTrade is fully optional.
@@ -104,8 +105,8 @@ async def _maybe_freqtrade(order: "TradeOrder", side: str, dry_run: bool):
     decision) but do not place a real force_entry.
     """
     try:
-        from core.config import get_settings
         from agents.executor.freqtrade_client import FreqTradeClient
+        from core.config import get_settings
         ftc = get_settings().freqtrade
 
         use, reason = await FreqTradeClient.detect(
@@ -128,7 +129,7 @@ async def _maybe_freqtrade(order: "TradeOrder", side: str, dry_run: bool):
         return False, f"freqtrade error: {exc}"
 
 
-async def execute_polymarket_order(decision, dry_run: bool = True) -> Dict[str, Any]:
+async def execute_polymarket_order(decision, dry_run: bool = True) -> dict[str, Any]:
     """
     Execute a PolymarketDecision. Called directly from deploy/live.py.
     Separated from the LangGraph flow to keep the agent graph clean.
@@ -149,7 +150,8 @@ async def execute_polymarket_order(decision, dry_run: bool = True) -> Dict[str, 
 
     try:
         from py_clob_client.clob_types import OrderArgs, OrderType
-        from py_clob_client.order_builder.constants import BUY, SELL
+        from py_clob_client.order_builder.constants import BUY
+
         from core.config import get_settings
         cfg = get_settings().polymarket
         from py_clob_client.client import ClobClient
@@ -178,8 +180,8 @@ def _calc_tp(price: float, tp_pct: float, side: str) -> float:
 
 
 async def _place_spot_order(order: TradeOrder) -> TradeOrder:
-    from data.fetcher import _exchange_ctx
     from core.config import get_settings
+    from data.fetcher import _exchange_ctx
     settings = get_settings()
     async with _exchange_ctx(sandbox=settings.exchange.sandbox) as exchange:
         try:

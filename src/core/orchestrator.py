@@ -20,7 +20,8 @@ Pipeline B — Polymarket (independent, shares ingested data):
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
+
 import structlog
 
 from core.state import TradingState
@@ -36,19 +37,19 @@ def build_trading_graph():
     Returns None if langgraph is not installed (graceful degradation).
     """
     try:
-        from langgraph.graph import StateGraph, END
+        from langgraph.graph import END, StateGraph
     except ImportError:
         logger.warning("langgraph_not_installed", hint="pip install langgraph")
         return None
 
-    from agents.technical_analyst.agent import run as run_technical
+    from agents.debate_engine.agent import run as run_debate
+    from agents.executor.agent import run as run_executor
+    from agents.ml_analyst.agent import run as run_ml
+    from agents.onchain_analyst.agent import run as run_onchain
+    from agents.polymarket_agent.agent import run as run_polymarket
+    from agents.risk_manager.agent import run as run_risk
     from agents.sentiment_analyst.agent import run as run_sentiment
-    from agents.onchain_analyst.agent   import run as run_onchain
-    from agents.debate_engine.agent     import run as run_debate
-    from agents.risk_manager.agent      import run as run_risk
-    from agents.executor.agent          import run as run_executor
-    from agents.polymarket_agent.agent  import run as run_polymarket
-    from agents.ml_analyst.agent       import run as run_ml
+    from agents.technical_analyst.agent import run as run_technical
 
     graph = StateGraph(TradingState)
 
@@ -107,7 +108,7 @@ def _wrap(agent_run_fn):
     """
     import dataclasses
 
-    async def _node(state: TradingState) -> Dict[str, Any]:
+    async def _node(state: TradingState) -> dict[str, Any]:
         # Shallow dict: preserves nested dataclass objects (IndicatorSnapshot etc.)
         if dataclasses.is_dataclass(state):
             state_dict = {f.name: getattr(state, f.name)
@@ -121,13 +122,13 @@ def _wrap(agent_run_fn):
     return _node
 
 
-async def _node_ingest_data(state: TradingState) -> Dict[str, Any]:
+async def _node_ingest_data(state: TradingState) -> dict[str, Any]:
     """
     Step 1 of every cycle: fetch all data sources concurrently.
     Populates ohlcv, sentiment_raw, and polymarket_snapshot in state.
     """
+    from core.config import get_settings
     from data.snapshot import fetch_full_snapshot
-    from core.config   import get_settings
 
     settings = get_settings()
     symbol   = state.symbol
@@ -195,7 +196,7 @@ def _routing_should_execute(state: TradingState) -> str:
 async def run_one_cycle(
     symbol: str = "BTC/USDT",
     dry_run: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run one complete analysis + execution cycle.
     Returns the final state as a dict.

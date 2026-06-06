@@ -15,8 +15,8 @@ The scoring system is rule-based and fully deterministic — no LLM required her
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -31,7 +31,7 @@ _FAST_TF        = "5m"     # Polymarket entry timing
 
 # ── LangGraph node entry point ────────────────────────────────────────────────
 
-async def run(state: Dict[str, Any]) -> Dict[str, Any]:
+async def run(state: dict[str, Any]) -> dict[str, Any]:
     from agents.technical_analyst.indicators import (
         compute_all_indicators,
         compute_fast_indicators,
@@ -42,7 +42,7 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
     new_errors = []
 
     # ── 4h standard analysis (primary bias) ───────────────────────────────────
-    snap_4h: Optional[IndicatorSnapshot] = None
+    snap_4h: IndicatorSnapshot | None = None
 
     if _PRIMARY_TF not in ohlcv:
         msg = f"technical_analyst: no {_PRIMARY_TF!r} data in ohlcv"
@@ -64,7 +64,7 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
 
     snap_4h = IndicatorSnapshot(
         symbol=symbol, timeframe=Timeframe.H4,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         # Price
         close=ind_4h.get("close"),
         volume=ind_4h.get("volume"),
@@ -101,7 +101,7 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
                 bb_pct=f"{ind_4h.get('bb_pct', 0.5):.2f}")
 
     # ── 5m fast analysis (Polymarket entry timing) ─────────────────────────────
-    snap_5m: Optional[IndicatorSnapshot] = None
+    snap_5m: IndicatorSnapshot | None = None
 
     if _FAST_TF in ohlcv:
         ind_5m = compute_fast_indicators(ohlcv[_FAST_TF])
@@ -109,7 +109,7 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
             sig_5m, conf_5m, reason_5m = _evaluate_fast(ind_5m)
             snap_5m = IndicatorSnapshot(
                 symbol=symbol, timeframe=Timeframe.M5,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 close=ind_5m.get("close"),
                 volume=ind_5m.get("volume"),
                 rsi_14=ind_5m.get("rsi_14"),
@@ -136,9 +136,9 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
 # ── Standard 4h scoring ───────────────────────────────────────────────────────
 
 def _evaluate_standard(
-    ind: Dict[str, Any],
-    ind_confirm: Optional[Dict[str, Any]] = None,
-) -> Tuple[Signal, float, str]:
+    ind: dict[str, Any],
+    ind_confirm: dict[str, Any] | None = None,
+) -> tuple[Signal, float, str]:
     """
     Rule-based scoring on the 4h timeframe.
     ind_confirm (1h) adds a small alignment bonus when both timeframes agree.
@@ -147,44 +147,78 @@ def _evaluate_standard(
     Normalised confidence: |score| / 11.0, clamped to [0, 1].
     """
     score: float = 0.0
-    reasons: List[str] = []
+    reasons: list[str] = []
     close = ind.get("close") or 0.0
 
     # ── RSI ────────────────────────────────────────────────────────────────────
     rsi = ind.get("rsi_14")
     if rsi is not None:
-        if   rsi <= 20: score += 3.0; reasons.append(f"RSI extreme oversold ({rsi:.1f})")
-        elif rsi <= 25: score += 2.5; reasons.append(f"RSI deeply oversold ({rsi:.1f})")
-        elif rsi <= 30: score += 2.0; reasons.append(f"RSI oversold ({rsi:.1f})")
-        elif rsi <= 40: score += 1.0; reasons.append(f"RSI near oversold ({rsi:.1f})")
-        elif rsi >= 80: score -= 3.0; reasons.append(f"RSI extreme overbought ({rsi:.1f})")
-        elif rsi >= 75: score -= 2.5; reasons.append(f"RSI deeply overbought ({rsi:.1f})")
-        elif rsi >= 70: score -= 2.0; reasons.append(f"RSI overbought ({rsi:.1f})")
-        elif rsi >= 60: score -= 0.5; reasons.append(f"RSI elevated ({rsi:.1f})")
+        if rsi <= 20:
+            score += 3.0
+            reasons.append(f"RSI extreme oversold ({rsi:.1f})")
+        elif rsi <= 25:
+            score += 2.5
+            reasons.append(f"RSI deeply oversold ({rsi:.1f})")
+        elif rsi <= 30:
+            score += 2.0
+            reasons.append(f"RSI oversold ({rsi:.1f})")
+        elif rsi <= 40:
+            score += 1.0
+            reasons.append(f"RSI near oversold ({rsi:.1f})")
+        elif rsi >= 80:
+            score -= 3.0
+            reasons.append(f"RSI extreme overbought ({rsi:.1f})")
+        elif rsi >= 75:
+            score -= 2.5
+            reasons.append(f"RSI deeply overbought ({rsi:.1f})")
+        elif rsi >= 70:
+            score -= 2.0
+            reasons.append(f"RSI overbought ({rsi:.1f})")
+        elif rsi >= 60:
+            score -= 0.5
+            reasons.append(f"RSI elevated ({rsi:.1f})")
 
     # ── EMA alignment ──────────────────────────────────────────────────────────
     ema_cross = ind.get("ema_cross", "FLAT")
     if ema_cross == "BULL":
-        score += 2.0; reasons.append("EMA 9>21>50 (bull stack)")
+        score += 2.0
+        reasons.append("EMA 9>21>50 (bull stack)")
     elif ema_cross == "BEAR":
-        score -= 2.0; reasons.append("EMA 9<21<50 (bear stack)")
+        score -= 2.0
+        reasons.append("EMA 9<21<50 (bear stack)")
 
     # EMA-200 trend filter (smaller weight — macro context only)
     e200 = ind.get("ema_200")
     if e200 and close:
-        if   close > e200 * 1.01: score += 0.5; reasons.append("Price well above EMA-200")
-        elif close > e200:        score += 0.2; reasons.append("Price above EMA-200")
-        elif close < e200 * 0.99: score -= 0.5; reasons.append("Price well below EMA-200")
-        else:                     score -= 0.2; reasons.append("Price below EMA-200")
+        if close > e200 * 1.01:
+            score += 0.5
+            reasons.append("Price well above EMA-200")
+        elif close > e200:
+            score += 0.2
+            reasons.append("Price above EMA-200")
+        elif close < e200 * 0.99:
+            score -= 0.5
+            reasons.append("Price well below EMA-200")
+        else:
+            score -= 0.2
+            reasons.append("Price below EMA-200")
 
     # ── Bollinger Bands ────────────────────────────────────────────────────────
     bb_pct = ind.get("bb_pct")   # 0 = at lower band, 1 = at upper band
     bb_width = ind.get("bb_width")
     if bb_pct is not None:
-        if   bb_pct <= 0.05: score += 2.0; reasons.append(f"Price at/below lower BB ({bb_pct:.2f})")
-        elif bb_pct <= 0.20: score += 1.0; reasons.append(f"Price near lower BB ({bb_pct:.2f})")
-        elif bb_pct >= 0.95: score -= 2.0; reasons.append(f"Price at/above upper BB ({bb_pct:.2f})")
-        elif bb_pct >= 0.80: score -= 1.0; reasons.append(f"Price near upper BB ({bb_pct:.2f})")
+        if bb_pct <= 0.05:
+            score += 2.0
+            reasons.append(f"Price at/below lower BB ({bb_pct:.2f})")
+        elif bb_pct <= 0.20:
+            score += 1.0
+            reasons.append(f"Price near lower BB ({bb_pct:.2f})")
+        elif bb_pct >= 0.95:
+            score -= 2.0
+            reasons.append(f"Price at/above upper BB ({bb_pct:.2f})")
+        elif bb_pct >= 0.80:
+            score -= 1.0
+            reasons.append(f"Price near upper BB ({bb_pct:.2f})")
     # BB squeeze: low volatility precedes breakout — informational only
     if bb_width is not None and bb_width < 0.02:
         reasons.append(f"BB squeeze (width={bb_width:.3f}) — breakout likely")
@@ -197,8 +231,12 @@ def _evaluate_standard(
         score += 1.0 if mhist > 0 else -1.0
         reasons.append(f"MACD hist {mhist:+.2f} ({'bull' if mhist > 0 else 'bear'})")
     if mline is not None and msig is not None:
-        if   mline > msig:  score += 0.5; reasons.append("MACD line > signal (bull cross)")
-        elif mline < msig:  score -= 0.5; reasons.append("MACD line < signal (bear cross)")
+        if mline > msig:
+            score += 0.5
+            reasons.append("MACD line > signal (bull cross)")
+        elif mline < msig:
+            score -= 0.5
+            reasons.append("MACD line < signal (bear cross)")
 
     # ── 1h confirmation bonus (multi-timeframe) ────────────────────────────────
     if ind_confirm:
@@ -206,22 +244,31 @@ def _evaluate_standard(
         confirm_rsi   = ind_confirm.get("rsi_14")
         # Only apply bonus when 1h agrees with 4h direction
         if ema_cross == "BULL" and confirm_cross == "BULL":
-            score += 0.5; reasons.append("1h EMA also bullish (MTF confirm)")
+            score += 0.5
+            reasons.append("1h EMA also bullish (MTF confirm)")
         elif ema_cross == "BEAR" and confirm_cross == "BEAR":
-            score -= 0.5; reasons.append("1h EMA also bearish (MTF confirm)")
+            score -= 0.5
+            reasons.append("1h EMA also bearish (MTF confirm)")
         # RSI divergence warning: 4h oversold but 1h already recovering
         if rsi and confirm_rsi:
             if rsi < 30 and confirm_rsi > 50:
-                score += 0.3; reasons.append("1h RSI recovering — divergence bullish")
+                score += 0.3
+                reasons.append("1h RSI recovering — divergence bullish")
             elif rsi > 70 and confirm_rsi < 50:
-                score -= 0.3; reasons.append("1h RSI weakening — divergence bearish")
+                score -= 0.3
+                reasons.append("1h RSI weakening — divergence bearish")
 
     # ── Signal mapping ─────────────────────────────────────────────────────────
-    if   score >=  5.0: sig = Signal.STRONG_BUY
-    elif score >=  1.5: sig = Signal.BUY
-    elif score <= -5.0: sig = Signal.STRONG_SELL
-    elif score <= -1.5: sig = Signal.SELL
-    else:               sig = Signal.NEUTRAL
+    if score >=  5.0:
+        sig = Signal.STRONG_BUY
+    elif score >=  1.5:
+        sig = Signal.BUY
+    elif score <= -5.0:
+        sig = Signal.STRONG_SELL
+    elif score <= -1.5:
+        sig = Signal.SELL
+    else :
+                       sig = Signal.NEUTRAL
 
     confidence = min(abs(score) / 11.0, 1.0)
     reasoning  = " | ".join(reasons) if reasons else "Insufficient data"
@@ -231,14 +278,14 @@ def _evaluate_standard(
 
 # ── Fast 5m scoring ───────────────────────────────────────────────────────────
 
-def _evaluate_fast(ind: Dict[str, Any]) -> Tuple[Signal, float, str]:
+def _evaluate_fast(ind: dict[str, Any]) -> tuple[Signal, float, str]:
     """
     Score fast 5-min indicators for Polymarket entry timing.
     Weights: MACD(3,15,3) momentum + RSI/VWAP reversal + CVD order flow.
     Max score: 4.5.
     """
     score: float = 0.0
-    reasons: List[str] = []
+    reasons: list[str] = []
 
     mh    = ind.get("macd_fast_hist", 0.0) or 0.0
     rsi   = ind.get("rsi_14", 50.0) or 50.0
@@ -258,28 +305,39 @@ def _evaluate_fast(ind: Dict[str, Any]) -> Tuple[Signal, float, str]:
     if vwap > 0 and close > 0:
         above_vwap = close > vwap
         if rsi < 30 and above_vwap:
-            score += 1.5; reasons.append(f"RSI oversold ({rsi:.1f}) + above VWAP")
+            score += 1.5
+            reasons.append(f"RSI oversold ({rsi:.1f}) + above VWAP")
         elif rsi < 40 and above_vwap:
-            score += 0.8; reasons.append(f"RSI near oversold ({rsi:.1f}) + above VWAP")
+            score += 0.8
+            reasons.append(f"RSI near oversold ({rsi:.1f}) + above VWAP")
         elif rsi > 70 and not above_vwap:
-            score -= 1.5; reasons.append(f"RSI overbought ({rsi:.1f}) + below VWAP")
+            score -= 1.5
+            reasons.append(f"RSI overbought ({rsi:.1f}) + below VWAP")
         elif rsi > 60 and not above_vwap:
-            score -= 0.8; reasons.append(f"RSI elevated ({rsi:.1f}) + below VWAP")
+            score -= 0.8
+            reasons.append(f"RSI elevated ({rsi:.1f}) + below VWAP")
 
     # ── CVD order flow confirmation ────────────────────────────────────────────
     if cvd != 0:
         # Rising CVD = buyers accumulating = bullish; falling = selling pressure
         if cvd > 0:
-            score += 0.5; reasons.append(f"CVD positive ({cvd:+.0f}) buy pressure")
+            score += 0.5
+            reasons.append(f"CVD positive ({cvd:+.0f}) buy pressure")
         else:
-            score -= 0.5; reasons.append(f"CVD negative ({cvd:+.0f}) sell pressure")
+            score -= 0.5
+            reasons.append(f"CVD negative ({cvd:+.0f}) sell pressure")
 
     # ── Signal mapping ─────────────────────────────────────────────────────────
-    if   score >=  2.5: sig = Signal.STRONG_BUY
-    elif score >=  1.0: sig = Signal.BUY
-    elif score <= -2.5: sig = Signal.STRONG_SELL
-    elif score <= -1.0: sig = Signal.SELL
-    else:               sig = Signal.NEUTRAL
+    if score >=  2.5:
+        sig = Signal.STRONG_BUY
+    elif score >=  1.0:
+        sig = Signal.BUY
+    elif score <= -2.5:
+        sig = Signal.STRONG_SELL
+    elif score <= -1.0:
+        sig = Signal.SELL
+    else :
+                       sig = Signal.NEUTRAL
 
     confidence = min(abs(score) / 4.5, 1.0)
     return sig, confidence, " | ".join(reasons) or "No fast signal"

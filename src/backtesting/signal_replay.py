@@ -22,8 +22,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, asdict
-from typing import List, Optional
+from dataclasses import asdict, dataclass
 
 import numpy as np
 import pandas as pd
@@ -56,7 +55,7 @@ class BacktestMetrics:
 
 # ── Persistence ──────────────────────────────────────────────────────────────
 
-def save_signals(records: List[SignalRecord], path: str) -> None:
+def save_signals(records: list[SignalRecord], path: str) -> None:
     """Persist a list of SignalRecord to a JSON file."""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w") as f:
@@ -64,7 +63,7 @@ def save_signals(records: List[SignalRecord], path: str) -> None:
     logger.info("signals_saved", path=path, n=len(records))
 
 
-def load_signals(path: str) -> List[SignalRecord]:
+def load_signals(path: str) -> list[SignalRecord]:
     """Load SignalRecord list from a JSON file."""
     with open(path) as f:
         raw = json.load(f)
@@ -76,11 +75,11 @@ def load_signals(path: str) -> List[SignalRecord]:
 # ── Replay ───────────────────────────────────────────────────────────────────
 
 def replay_as_trades(
-    records: List[SignalRecord],
+    records: list[SignalRecord],
     df: pd.DataFrame,
     slippage_pct: float = 0.001,
     fee_pct: float = 0.0004,
-) -> List[TradeResult]:
+) -> list[TradeResult]:
     """
     Simulate trades by pairing BUY/STRONG_BUY signals with subsequent
     SELL/STRONG_SELL signals on the provided OHLCV DataFrame.
@@ -89,7 +88,8 @@ def replay_as_trades(
     Slippage applied as: entry_price * (1 + slippage_pct) for buys.
     Fee applied twice: entry + exit, as a fraction of notional.
 
-    Returns list of TradeResult; skips unmatched entries.
+    Returns list of TradeResult
+    skips unmatched entries.
     """
     if df is None or df.empty or not records:
         return []
@@ -97,7 +97,7 @@ def replay_as_trades(
     # Pair BUY entries with next SELL exits
     buy_signals  = [r for r in records if r.signal in ("BUY", "STRONG_BUY")]
     sell_signals = [r for r in records if r.signal in ("SELL", "STRONG_SELL")]
-    trades: List[TradeResult] = []
+    trades: list[TradeResult] = []
 
     for entry in buy_signals:
         # Find the first SELL signal that comes AFTER this BUY
@@ -132,7 +132,7 @@ def replay_as_trades(
 
 # ── Metrics ──────────────────────────────────────────────────────────────────
 
-def compute_metrics(trades: List[TradeResult]) -> BacktestMetrics:
+def compute_metrics(trades: list[TradeResult]) -> BacktestMetrics:
     """Compute summary statistics from a list of completed trades."""
     if not trades:
         return BacktestMetrics(0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -174,7 +174,7 @@ def compute_metrics(trades: List[TradeResult]) -> BacktestMetrics:
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _price_at(df: pd.DataFrame, timestamp_str: str) -> Optional[float]:
+def _price_at(df: pd.DataFrame, timestamp_str: str) -> float | None:
     """Return the close price of the bar closest to timestamp_str."""
     try:
         ts = pd.Timestamp(timestamp_str)

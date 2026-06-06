@@ -3,10 +3,10 @@ Paper broker: simulates order fills with slippage for testing.
 Used by backtesting and manual paper trading validation.
 """
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class PaperBroker:
     """Simulate order placement and settlement."""
 
     def __init__(self):
-        self.orders: List[PaperOrder] = []
+        self.orders: list[PaperOrder] = []
         self._order_counter = 0
 
     def place_order(

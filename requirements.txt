@@ -13,9 +13,9 @@ websockets>=13.0
 
 # ── Technical Analysis ────────────────────────────────────────────────────────
 TA-Lib>=0.4.32              # system dep: brew install ta-lib / apt install libta-lib-dev
-pandas-ta>=0.3.14b          # pandas fallback; no system dep
+pandas-ta>=0.3.14           # pandas fallback; no system dep
 pandas>=2.2.0,<3.0.0
-numpy>=1.26.0,<2.0.0
+numpy>=1.26.0               # no upper cap — pandas-ta 0.4.x requires >=2.2.6
 scipy>=1.13.0
 
 # ── Config / Validation ───────────────────────────────────────────────────────

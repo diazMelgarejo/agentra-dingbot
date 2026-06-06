@@ -9,7 +9,8 @@ Design goals
   module runs anywhere (mirrors the indicators.py fallback philosophy).
 * Deterministic — same input always yields the same features.
 * NaN-tolerant downstream — early rows will contain NaNs from rolling
-  windows; the model layer either drops them (training) or forward-fills
+  windows
+  the model layer either drops them (training) or forward-fills
   the final row (inference). We do NOT silently zero-fill, which would
   bias the model.
 
@@ -25,13 +26,11 @@ volume       : vol_z_20
 """
 from __future__ import annotations
 
-from typing import List
 import numpy as np
 import pandas as pd
 
-
 # Canonical, ordered feature list — the model relies on this exact order.
-FEATURE_COLUMNS: List[str] = [
+FEATURE_COLUMNS: list[str] = [
     "r_1", "log_r_1",
     "r_lag_1", "r_lag_2", "r_lag_3", "r_lag_5",
     "roll_mean_5", "roll_mean_10", "roll_std_5", "roll_std_10",
@@ -53,7 +52,8 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     DataFrame indexed like `df`, with exactly FEATURE_COLUMNS columns.
-    Early rows contain NaNs (rolling warm-up); callers decide how to handle.
+    Early rows contain NaNs (rolling warm-up)
+    callers decide how to handle.
     """
     if df is None or len(df) == 0:
         return pd.DataFrame(columns=FEATURE_COLUMNS)

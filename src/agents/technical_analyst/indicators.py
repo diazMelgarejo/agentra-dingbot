@@ -33,7 +33,8 @@ Fast (5m Polymarket):
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
+
 import numpy as np
 import structlog
 
@@ -47,11 +48,12 @@ _EMA200_MIN       = 200   # EMA-200 only computed when enough history exists
 
 # ── Public entry points ───────────────────────────────────────────────────────
 
-def compute_all_indicators(df) -> Optional[Dict[str, Any]]:
+def compute_all_indicators(df) -> dict[str, Any] | None:
     """
     Compute standard indicators for spot trading (4h primary timeframe).
     Returns None if df is None or has fewer than _MIN_CANDLES rows.
-    Tries TA-Lib first; falls back to pure pandas on ImportError.
+    Tries TA-Lib first
+    falls back to pure pandas on ImportError.
     """
     if df is None or len(df) < _MIN_CANDLES:
         logger.warning("insufficient_candles",
@@ -75,11 +77,12 @@ def compute_all_indicators(df) -> Optional[Dict[str, Any]]:
     return _validate_and_enrich(result)
 
 
-def compute_fast_indicators(df) -> Optional[Dict[str, Any]]:
+def compute_fast_indicators(df) -> dict[str, Any] | None:
     """
     Compute fast 5-min indicators for Polymarket signals.
     Returns None if df has fewer than _MIN_CANDLES_FAST rows.
-    Uses pandas-ta; falls back to pure numpy if unavailable.
+    Uses pandas-ta
+    falls back to pure numpy if unavailable.
     """
     if df is None or len(df) < _MIN_CANDLES_FAST:
         logger.warning("fast_insufficient_candles",
@@ -98,13 +101,13 @@ def compute_fast_indicators(df) -> Optional[Dict[str, Any]]:
 
 # ── TA-Lib path ───────────────────────────────────────────────────────────────
 
-def _compute_talib(df, talib) -> Dict[str, Any]:
+def _compute_talib(df, talib) -> dict[str, Any]:
     close  = df["close"].values.astype(np.float64)
     high   = df["high"].values.astype(np.float64)
     low    = df["low"].values.astype(np.float64)
     volume = df["volume"].values.astype(np.float64)
 
-    r: Dict[str, Any] = {}
+    r: dict[str, Any] = {}
 
     # RSI — Wilder smoothing (talib default)
     r["rsi_14"] = float(talib.RSI(close, timeperiod=14)[-1])
@@ -139,13 +142,13 @@ def _compute_talib(df, talib) -> Dict[str, Any]:
 
 # ── Pandas fallback path ──────────────────────────────────────────────────────
 
-def _compute_fallback(df) -> Dict[str, Any]:
+def _compute_fallback(df) -> dict[str, Any]:
     """Pure-pandas/numpy fallback. Numerically equivalent to TA-Lib path."""
     close = df["close"].astype(float)
     high  = df["high"].astype(float)
     low   = df["low"].astype(float)
 
-    r: Dict[str, Any] = {}
+    r: dict[str, Any] = {}
 
     # ── RSI: Wilder's EWM (com = period - 1 = 13) ────────────────────────────
     delta = close.diff()
@@ -196,12 +199,12 @@ def _compute_fallback(df) -> Dict[str, Any]:
 
 # ── Fast indicators path ──────────────────────────────────────────────────────
 
-def _compute_fast_pandas_ta(df) -> Dict[str, Any]:
+def _compute_fast_pandas_ta(df) -> dict[str, Any]:
     """MACD(3,15,3) + RSI + VWAP + CVD using pandas-ta."""
     import pandas as pd
     import pandas_ta as ta
 
-    r: Dict[str, Any] = {}
+    r: dict[str, Any] = {}
 
     close  = df["close"].astype(float)
     volume = df["volume"].astype(float)
@@ -238,14 +241,14 @@ def _compute_fast_pandas_ta(df) -> Dict[str, Any]:
     return r
 
 
-def _compute_fast_fallback(df) -> Dict[str, Any]:
+def _compute_fast_fallback(df) -> dict[str, Any]:
     """Pure numpy/pandas fast indicators when pandas-ta is not installed."""
     import pandas as pd
 
     close  = df["close"].astype(float)
     volume = df["volume"].astype(float)
 
-    r: Dict[str, Any] = {}
+    r: dict[str, Any] = {}
 
     # MACD(3,15,3) via EWM
     ema3  = close.ewm(span=3,  adjust=False).mean()
@@ -277,7 +280,7 @@ def _compute_fast_fallback(df) -> Dict[str, Any]:
 
 # ── Validation and enrichment ─────────────────────────────────────────────────
 
-def _validate_and_enrich(r: Dict[str, Any]) -> Dict[str, Any]:
+def _validate_and_enrich(r: dict[str, Any]) -> dict[str, Any]:
     """
     Post-process computed indicators:
       1. Clip RSI to [0, 100] — floating point can produce tiny violations
@@ -288,8 +291,10 @@ def _validate_and_enrich(r: Dict[str, Any]) -> Dict[str, Any]:
     import math
 
     def _clean(v):
-        if v is None: return None
-        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)): return None
+        if v is None:
+            return None
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return None
         return v
 
     r = {k: _clean(v) for k, v in r.items()}
@@ -299,7 +304,9 @@ def _validate_and_enrich(r: Dict[str, Any]) -> Dict[str, Any]:
         r["rsi_14"] = max(0.0, min(100.0, r["rsi_14"]))
 
     # BB derived fields
-    bbu = r.get("bb_upper"); bbm = r.get("bb_middle"); bbl = r.get("bb_lower")
+    bbu = r.get("bb_upper")
+    bbm = r.get("bb_middle")
+    bbl = r.get("bb_lower")
     if bbu and bbm and bbl:
         band = bbu - bbl
         r["bb_width"] = band / bbm if bbm else 0.0
@@ -310,15 +317,21 @@ def _validate_and_enrich(r: Dict[str, Any]) -> Dict[str, Any]:
         r.setdefault("bb_pct",   None)
 
     # ATR as % of price
-    atr = r.get("atr_14"); cl = r.get("close")
+    atr = r.get("atr_14")
+    cl = r.get("close")
     r["atr_pct"] = (atr / cl) if (atr and cl and cl > 0) else None
 
     # EMA cross classification
-    e9 = r.get("ema_9"); e21 = r.get("ema_21"); e50 = r.get("ema_50")
+    e9 = r.get("ema_9")
+    e21 = r.get("ema_21")
+    e50 = r.get("ema_50")
     if e9 and e21 and e50:
-        if e9 > e21 > e50:   r["ema_cross"] = "BULL"
-        elif e9 < e21 < e50: r["ema_cross"] = "BEAR"
-        else:                r["ema_cross"] = "FLAT"
+        if e9 > e21 > e50:
+            r["ema_cross"] = "BULL"
+        elif e9 < e21 < e50:
+            r["ema_cross"] = "BEAR"
+        else:
+            r["ema_cross"] = "FLAT"
     else:
         r["ema_cross"] = "FLAT"
 

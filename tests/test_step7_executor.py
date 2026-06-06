@@ -17,11 +17,9 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # A. API Key Permission Safety
@@ -257,6 +255,7 @@ class TestCCXTFailureMatrix:
     async def test_insufficient_funds_skips_order(self):
         """InsufficientFunds → no crash, order=None, error logged."""
         import ccxt
+
         from agents.executor.agent import run
         with patch("src.agents.executor.freqtrade_client.FreqTradeClient.detect",
                    AsyncMock(return_value=(False, "off"))), \
@@ -270,6 +269,7 @@ class TestCCXTFailureMatrix:
     async def test_authentication_error_halts(self):
         """AuthenticationError → must not retry (key is bad — halt)."""
         import ccxt
+
         from agents.executor.agent import run
         call_count = [0]
 
@@ -280,14 +280,13 @@ class TestCCXTFailureMatrix:
         with patch("src.agents.executor.freqtrade_client.FreqTradeClient.detect",
                    AsyncMock(return_value=(False, "off"))), \
              patch("src.agents.executor.agent._place_spot_order", counting_place):
-            result = await run(self._state())
+            await run(self._state())
         # Must only attempt once (no retry on auth error)
         assert call_count[0] <= 1
 
     @pytest.mark.asyncio
     async def test_rate_limit_triggers_retry_with_backoff(self):
         """RateLimitExceeded → executor must not crash; returns result dict."""
-        import ccxt
         from agents.executor.agent import run
         # Use dry_run state + FreqTrade off → exercises the safe path without CCXT connection
         state = self._state()
@@ -315,7 +314,7 @@ class TestCCXTFailureMatrix:
                        AsyncMock(return_value=(False, "off"))):
                 place = AsyncMock()
                 with patch("src.agents.executor.agent._place_spot_order", place):
-                    result = await run(self._state())
+                    await run(self._state())
         place.assert_not_called()
 
 

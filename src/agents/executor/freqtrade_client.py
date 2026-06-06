@@ -24,7 +24,7 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import structlog
 
@@ -54,7 +54,7 @@ class FreqTradeClient:
     # ── Detection ───────────────────────────────────────────────────────────────
 
     @staticmethod
-    def find_binary() -> Optional[str]:
+    def find_binary() -> str | None:
         """Return the path to a freqtrade binary if one exists, else None."""
         # Anything already on PATH
         on_path = shutil.which("freqtrade")
@@ -72,9 +72,11 @@ class FreqTradeClient:
         try:
             import aiohttp
             auth = aiohttp.BasicAuth(self.username, self.password)
-            async with aiohttp.ClientSession(auth=auth) as s:
-                async with s.get(f"{self.base}/api/v1/ping",
-                                 timeout=aiohttp.ClientTimeout(total=timeout)) as r:
+            async with (
+                aiohttp.ClientSession(auth=auth) as s,
+                s.get(f"{self.base}/api/v1/ping",
+                      timeout=aiohttp.ClientTimeout(total=timeout)) as r,
+            ):
                     if r.status != 200:
                         return False
                     data = await r.json(content_type=None)
@@ -84,7 +86,7 @@ class FreqTradeClient:
 
     @classmethod
     async def detect(cls, base_url: str, username: str, password: str,
-                     mode: str = "auto") -> Tuple[bool, str]:
+                     mode: str = "auto") -> tuple[bool, str]:
         """
         Decide whether FreqTrade should be used.
 
@@ -120,35 +122,35 @@ class FreqTradeClient:
     # ── REST calls ────────────────────────────────────────────────────────────────
 
     async def _request(self, method: str, path: str,
-                       payload: Optional[dict] = None,
-                       timeout: float = 10.0) -> Dict[str, Any]:
+                       payload: dict | None = None,
+                       timeout: float = 10.0) -> Any:
         import aiohttp
         auth = aiohttp.BasicAuth(self.username, self.password)
         async with aiohttp.ClientSession(auth=auth) as s:
             fn = getattr(s, method.lower())
-            kwargs: Dict[str, Any] = {"timeout": aiohttp.ClientTimeout(total=timeout)}
+            kwargs: dict[str, Any] = {"timeout": aiohttp.ClientTimeout(total=timeout)}
             if payload is not None:
                 kwargs["json"] = payload
             async with fn(f"{self.base}/api/v1{path}", **kwargs) as r:
                 r.raise_for_status()
                 return await r.json(content_type=None)
 
-    async def status(self) -> List[Dict[str, Any]]:
+    async def status(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/status")
 
-    async def profit(self) -> Dict[str, Any]:
+    async def profit(self) -> dict[str, Any]:
         return await self._request("GET", "/profit")
 
-    async def performance(self) -> List[Dict[str, Any]]:
+    async def performance(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/performance")
 
-    async def count(self) -> Dict[str, Any]:
+    async def count(self) -> dict[str, Any]:
         return await self._request("GET", "/count")
 
     async def force_entry(self, pair: str, side: str = "long",
-                          stake_amount: Optional[float] = None,
-                          price: Optional[float] = None) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"pair": pair, "side": side}
+                          stake_amount: float | None = None,
+                          price: float | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"pair": pair, "side": side}
         if stake_amount is not None:
             payload["stakeamount"] = stake_amount
         if price is not None:
@@ -156,7 +158,7 @@ class FreqTradeClient:
         logger.info("freqtrade_force_entry", pair=pair, side=side, stake=stake_amount)
         return await self._request("POST", "/forceenter", payload)
 
-    async def force_exit(self, trade_id: str, ordertype: str = "limit") -> Dict[str, Any]:
+    async def force_exit(self, trade_id: str, ordertype: str = "limit") -> dict[str, Any]:
         logger.info("freqtrade_force_exit", trade_id=trade_id)
         return await self._request("POST", "/forceexit",
                                    {"tradeid": str(trade_id), "ordertype": ordertype})
