@@ -5,7 +5,9 @@
 > 
 > [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 > [![Python](https://img.shields.io/badge/python-3.11+-green.svg)](https://python.org)
-> [![Step](https://img.shields.io/badge/build-Step_2_Complete-brightgreen)](docs/ARCHITECTURE.md)
+> [![Build](https://img.shields.io/badge/build-Steps_1--7_complete-brightgreen)](docs/PROGRESS.md)
+> [![Tests](https://img.shields.io/badge/tests-307_passing-brightgreen)](tests/)
+> [![Dashboard](https://img.shields.io/badge/dashboard-live-2540ff)](https://diazmelgarejo.github.io/agentra-dingbot/)
 
 ---
 
@@ -19,18 +21,26 @@ Merges two battle-tested X bot strategies:
 
 ---
 
-## What's Built (Steps 1 + 2)
+## Project Status — Steps 1–7 Complete ✅
+
+**307 tests passing, 6 skipped** · TDD throughout (RED → GREEN → REFACTOR) · zero-key by default.
 
 | Step | Status | What's Inside |
 |------|--------|--------------|
-| **Step 1** — Scaffold | ✅ | All 6 agents, LangGraph orchestrator, FastAPI dashboard |
+| **Step 1** — Scaffold | ✅ | 8 agents, LangGraph orchestrator, FastAPI dashboard |
 | **Step 2** — Data Ingestion | ✅ | CCXT (Binance OHLCV) + Polymarket REST + Fear & Greed/VIX + WebSocket orderbook |
-| **Step 3** — TA Agent | 🔜 | TA-Lib validation + indicator tests |
-| **Step 4** — LangGraph | 🔜 | Integration test end-to-end |
-| **Step 5** — FreqAI | 🔜 | ML signal bridge |
-| **Step 6** — Risk tuning | 🔜 | Backtest validation |
-| **Step 7** — Executor | 🔜 | Dry-run test suite |
-| **Step 8** — Dashboard | 🔜 | React + WebSocket UI |
+| **Step 3** — TA Agent | ✅ | TA-Lib primary / pandas-ta fallback · MACD/RSI/VWAP/CVD · 5-min fast signals |
+| **Step 4** — LangGraph | ✅ | Dual-pipeline orchestrator · shallow-dict state bridge · concurrent fan-out |
+| **Step 5** — FreqAI ML | ✅ | LightGBM / sklearn-HGB fallback · 16-feature pipeline · cached retraining |
+| **Step 6** — Backtest Validation | ✅ | Walk-forward (purged/embargo) · block-bootstrap Monte Carlo (P5/P50/**P95**/P99) · Brier score · dynamic Polymarket fees |
+| **Step 7** — Executor Safety | ✅ | Fail-closed permission check · order validation · KillSwitch · LIVE opt-in gate · NAV-based circuit breaker · CCXT retry matrix |
+| **Step 8** — Dashboard | ✅ | Self-contained static dashboard · light/dark themes · live WebSocket + demo fallback · [**live demo →**](https://diazmelgarejo.github.io/agentra-dingbot/) |
+
+### Highlights
+- **Backtesting that doesn't lie**: capital is sized against the Monte Carlo **P95** drawdown (which runs 1.5–3× the single-path backtest), not the optimistic backtest figure.
+- **Safety-first executor**: refuses to start if API keys carry withdraw permission; paper mode is the default and going live requires both `LIVE_TRADING=true` and a typed confirmation.
+- **Zero external dependencies required**: runs with no LLM key (`LLM_PROVIDER=none` heuristic judge), no FreqTrade, no Docker. Each is an optional upgrade.
+- **Agent-council ready**: `AGENTS.md`, `docs/HANDOFF.md`, `docs/SPECS.md`, `docs/LESSONS.md` (28 lessons) document every decision for the next contributor.
 
 ---
 
@@ -73,37 +83,46 @@ cp .env.example .env
 ### Backtest (no API keys needed)
 
 ```bash
-python -m src.backtesting.backtest --days 30
-python -m src.backtesting.monte_carlo --simulations 5000
+make backtest                                   # 30-day walk-forward + Monte Carlo
+PYTHONPATH=src python src/backtesting/backtest.py --days 90 --sims 5000
 ```
 
-### Paper Trade (Polymarket)
+### Paper Trade (safe default)
 
 ```bash
-python deploy/live.py --paper
+make paper                                      # paper mode, no real orders
+PYTHONPATH=src LLM_PROVIDER=none python src/deploy/live.py --paper
 ```
 
-### Run Spot Cycle (dry-run)
+### Run One Cycle (dry-run)
 
 ```bash
-python -m src.core.cli run --symbol BTC/USDT
+PYTHONPATH=src LLM_PROVIDER=none python src/core/cli.py run --symbol BTC/USDT
 ```
 
 ### Tests
 
 ```bash
-pytest --cov=src --cov-report=term-missing --ignore=tests/live   # all tests
-pytest tests/test_data_ingestion.py -v                           # Step 2 data layer only
-ruff check src tests                                             # lint
-mypy src --ignore-missing-imports                                # type-check
+make test                                       # all 307 tests
+make coverage                                   # tests + 80% coverage gate
+python -m pytest tests/test_step6_backtest.py -v   # Step 6 backtest suite
+ruff check src tests && mypy src                # lint + type-check
 ```
 
 ### Dashboard
 
 ```bash
-superbot dashboard --port 8000
-# Open http://localhost:8000/docs
+# Option 1 — instant static demo (no backend, no build)
+open docs/index.html
+
+# Option 2 — live data: start backend, then open the dashboard
+LLM_PROVIDER=none python src/dashboard/app.py     # WebSocket at /ws/signals
+python -m http.server 8080 --directory docs       # → http://localhost:8080
 ```
+
+The dashboard auto-connects to `ws://localhost:8000/ws/signals`; if no backend is
+running it falls back to a live-updating demo. Public demo:
+**https://diazmelgarejo.github.io/agentra-dingbot/** · details in [docs/DASHBOARD.md](docs/DASHBOARD.md).
 
 ---
 
@@ -132,7 +151,8 @@ Key `.env` variables:
 | `KELLY_FRACTION` | `0.25` | Fractional Kelly (25% of optimal) |
 | `MIN_EDGE_PCT` | `8.0` | Min Bayesian edge to trade |
 | `DAILY_DRAWDOWN_LIMIT_PCT` | `5.0` | Circuit breaker threshold |
-| `LLM_PROVIDER` | `ollama` | `ollama` (local) or `openai` |
+| `LLM_PROVIDER` | `none` | `none` (heuristic, zero-key) · `ollama` (local) · `openai` |
+| `LIVE_TRADING` | `false` | Must be `true` **and** typed-confirmed to place real orders |
 
 ---
 

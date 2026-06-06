@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentra DingBot — Trading Dashboard</title>
+<meta name="description" content="Multi-agent BTC/ETH + Polymarket hybrid trading platform. Live signal consensus, agent analysis, and risk monitoring.">
+
+<!-- Lightweight Charts (Apache-2.0) — TradingView's open-source library, fed by our own CCXT data -->
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
+<!-- Fonts: Sora (display) + Manrope (body) + JetBrains Mono (data/prices) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — Clarence design system (color encodes STATE, not decoration)
+   Blue/navy professional palette · explicitly designed dark surfaces
+   ════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Light theme */
+  --bg:           #f4f7fc;
+  --surface:      #ffffff;
+  --surface-2:    #eef3fa;
+  --surface-3:    #e4ecf7;
+  --border:       #dde6f2;
+  --border-strong:#c5d3e8;
+  --text:         #0f1b2d;
+  --text-2:       #41526b;
+  --text-muted:   #6b7d99;
+  --primary:      #2540ff;
+  --primary-2:    #1a30d6;
+  --primary-soft: #e6ebff;
+  /* State colors — functional only */
+  --bull:         #00a878;
+  --bull-soft:    #d6f5ec;
+  --bear:         #e03e52;
+  --bear-soft:    #fbe0e4;
+  --warn:         #e08a00;
+  --warn-soft:    #fdeed1;
+  --neutral:      #6b7d99;
+  --neutral-soft: #e8edf5;
+  --shadow:       0 1px 2px rgba(15,27,45,.04), 0 4px 16px rgba(15,27,45,.06);
+  --shadow-lg:    0 8px 32px rgba(15,27,45,.10);
+}
+[data-theme="dark"] {
+  --bg:           #080c17;
+  --surface:      #0f1525;
+  --surface-2:    #161e33;
+  --surface-3:    #1d273f;
+  --border:       #202b44;
+  --border-strong:#2c3a58;
+  --text:         #e9eef9;
+  --text-2:       #aebbd4;
+  --text-muted:   #76879f;
+  --primary:      #4d6bff;
+  --primary-2:    #6680ff;
+  --primary-soft: #16203f;
+  --bull:         #00d29a;
+  --bull-soft:    #08291f;
+  --bear:         #ff5668;
+  --bear-soft:    #2a1217;
+  --warn:         #ffb02e;
+  --warn-soft:    #2a2008;
+  --neutral:      #76879f;
+  --neutral-soft: #1a2335;
+  --shadow:       0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.4);
+  --shadow-lg:    0 8px 32px rgba(0,0,0,.5);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body {
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  transition: background .25s ease, color .25s ease;
+}
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+h1,h2,h3,.display { font-family: 'Sora', system-ui, sans-serif; letter-spacing: -.02em; }
+
+/* ════════════════════════════════════════════════════════════════════
+   LAYOUT — left sidebar + top header + content grid (Clarence SaaS pattern)
+   ════════════════════════════════════════════════════════════════════ */
+.app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+
+/* ── Sidebar ──────────────────────────────────────────────────────── */
+.sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 14px;
+  display: flex; flex-direction: column; gap: 4px;
+  position: sticky; top: 0; height: 100vh;
+}
+.brand { display: flex; align-items: center; gap: 11px; padding: 6px 8px 22px; }
+.brand-mark {
+  width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  display: grid; place-items: center;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 40%, transparent);
+}
+.brand-mark svg { width: 19px; height: 19px; }
+.brand-name { font-family: 'Sora'; font-weight: 700; font-size: 15px; line-height: 1.15; }
+.brand-sub { font-size: 10.5px; color: var(--text-muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.nav-label { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; padding: 16px 10px 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px; border-radius: 9px;
+  color: var(--text-2); font-size: 13.5px; font-weight: 600;
+  cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+  transition: background .15s, color .15s;
+}
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item.active { background: var(--primary-soft); color: var(--primary); }
+.nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+.sidebar-foot { margin-top: auto; padding: 12px 10px 0; border-top: 1px solid var(--border); }
+.sidebar-foot a { color: var(--text-muted); font-size: 12px; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 7px; padding: 6px 0; transition: color .15s; }
+.sidebar-foot a:hover { color: var(--primary); }
+
+/* ── Header ───────────────────────────────────────────────────────── */
+.main { display: flex; flex-direction: column; min-width: 0; }
+.header {
+  display: flex; align-items: center; gap: 18px;
+  padding: 16px 28px; border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20;
+}
+.symbol-pick { display: flex; align-items: center; gap: 10px; }
+.symbol-pick .pair { font-family: 'Sora'; font-weight: 700; font-size: 19px; }
+.symbol-pick .price { font-size: 15px; font-weight: 600; }
+.chg { font-size: 13px; font-weight: 700; padding: 3px 9px; border-radius: 7px; }
+.chg.up { color: var(--bull); background: var(--bull-soft); }
+.chg.down { color: var(--bear); background: var(--bear-soft); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.conn {
+  display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700;
+  padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border);
+}
+.conn .dot { width: 8px; height: 8px; border-radius: 50%; }
+.conn.live { color: var(--bull); border-color: color-mix(in srgb, var(--bull) 40%, transparent); }
+.conn.live .dot { background: var(--bull); box-shadow: 0 0 0 0 var(--bull); animation: pulse 2s infinite; }
+.conn.demo { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.conn.demo .dot { background: var(--warn); }
+@keyframes pulse { 0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--bull) 60%,transparent);} 70%{box-shadow:0 0 0 6px transparent;} 100%{box-shadow:0 0 0 0 transparent;} }
+.icon-btn {
+  width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-2); cursor: pointer;
+  display: grid; place-items: center; transition: all .15s;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+.icon-btn svg { width: 18px; height: 18px; }
+
+/* ── Content ──────────────────────────────────────────────────────── */
+.content { padding: 24px 28px 40px; display: flex; flex-direction: column; gap: 20px; }
+.section-title { font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: .06em; text-transform: uppercase; margin-bottom: -6px; }
+
+/* KPI cards — values 2-3x larger than labels (Clarence's explicit rule) */
+.kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.kpi {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px 18px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+}
+.kpi-label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); letter-spacing: .03em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.kpi-value { font-family: 'Sora'; font-weight: 700; font-size: 30px; line-height: 1.1; margin-top: 8px; }
+.kpi-sub { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-top: 5px; }
+.kpi-accent { position: absolute; top: 0; left: 0; width: 3px; height: 100%; }
+.kpi-value.bull, .text-bull { color: var(--bull); }
+.kpi-value.bear, .text-bear { color: var(--bear); }
+.kpi-value.warn, .text-warn { color: var(--warn); }
+.kpi-value.neutral { color: var(--neutral); }
+
+/* signal pill badges */
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; letter-spacing: .02em; }
+.pill.strong_buy, .pill.buy { color: var(--bull); background: var(--bull-soft); }
+.pill.strong_sell, .pill.sell { color: var(--bear); background: var(--bear-soft); }
+.pill.neutral { color: var(--neutral); background: var(--neutral-soft); }
+.pill.elevated, .pill.warn { color: var(--warn); background: var(--warn-soft); }
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* main grid: chart (2fr) + side panels (1fr) */
+.main-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.card-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.card-head h3 { font-size: 14.5px; font-weight: 700; }
+.card-head .meta { margin-left: auto; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.card-body { padding: 18px 20px; }
+.chart-wrap { padding: 8px; }
+#price-chart { width: 100%; height: 380px; }
+
+/* agent cards */
+.agents-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.agent {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px; box-shadow: var(--shadow); transition: transform .15s, border-color .15s;
+}
+.agent:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.agent-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.agent-name { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; }
+.agent-ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-2); }
+.agent-ico svg { width: 16px; height: 16px; color: var(--primary); }
+.agent-metric { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 0; border-top: 1px dashed var(--border); font-size: 12.5px; }
+.agent-metric:first-of-type { border-top: none; }
+.agent-metric .k { color: var(--text-muted); font-weight: 600; }
+.agent-metric .v { font-weight: 700; }
+
+/* confidence bar */
+.conf-track { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; margin-top: 10px; }
+.conf-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary), var(--primary-2)); transition: width .6s cubic-bezier(.4,0,.2,1); }
+
+/* gauges */
+.gauge-row { display: flex; gap: 18px; align-items: center; justify-content: space-around; }
+.gauge { text-align: center; }
+.gauge svg { transform: rotate(-90deg); }
+.gauge-track { stroke: var(--surface-3); }
+.gauge-val { font-family: 'Sora'; font-weight: 700; font-size: 22px; }
+.gauge-lbl { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-size: 10.5px; font-weight: 700; color: var(--text-muted); letter-spacing: .05em; text-transform: uppercase; padding: 8px 20px; border-bottom: 1px solid var(--border); }
+td { padding: 11px 20px; border-bottom: 1px solid var(--border); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--surface-2); }
+.empty { padding: 32px 20px; text-align: center; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+
+/* polymarket rows */
+.pm-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.pm-row:last-child { border-bottom: none; }
+.pm-q { flex: 1; font-size: 12.5px; font-weight: 600; }
+.pm-prob { font-family: 'JetBrains Mono'; font-weight: 700; font-size: 14px; }
+.pm-bar { width: 56px; height: 5px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.pm-bar-fill { height: 100%; background: var(--primary); }
+
+/* footer */
+.foot { padding: 20px 28px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.foot .src { display: flex; align-items: center; gap: 6px; }
+.foot .src .d { width: 7px; height: 7px; border-radius: 50%; background: var(--bull); }
+.foot a { color: var(--primary); text-decoration: none; font-weight: 700; }
+
+.banner {
+  background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 10px;
+}
+.banner svg { width: 18px; height: 18px; flex-shrink: 0; }
+.banner code { background: color-mix(in srgb, var(--warn) 15%, transparent); padding: 1px 6px; border-radius: 5px; font-family: 'JetBrains Mono'; font-size: 12px; }
+
+/* responsive */
+@media (max-width: 1100px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main-grid { grid-template-columns: 1fr; }
+  .agents-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .kpi-grid, .agents-grid { grid-template-columns: 1fr; }
+  .content, .header, .foot { padding-left: 16px; padding-right: 16px; }
+}
+.fade-in { animation: fadeIn .5s ease both; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ════════ SIDEBAR ════════ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 17l5-5 4 3 8-8" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20" cy="7" r="2.2" fill="#fff"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Agentra</div>
+        <div class="brand-sub">DingBot</div>
+      </div>
+    </div>
+    <div class="nav-label">Trading</div>
+    <button class="nav-item active"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-9 4 18 3-9h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Live Signals</button>
+    <button class="nav-item"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="2"/></svg> Charts</button>
+    <button class="nav-item"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Agents</button>
+    <button class="nav-item"><svg viewBox="0 0 24 24" fill="none"><path d="M21 21H4a1 1 0 01-1-1V3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 14l4-4 3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Backtests</button>
+    <div class="nav-label">Markets</div>
+    <button class="nav-item"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18" stroke="currentColor" stroke-width="2"/></svg> Polymarket</button>
+    <button class="nav-item"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> Risk Manager</button>
+    <div class="sidebar-foot">
+      <a href="https://github.com/diazMelgarejo/agentra-dingbot" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 016 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0024 12c0-6.63-5.37-12-12-12z"/></svg> View on GitHub</a>
+      <a href="#" id="freqlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M8 12l3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> FreqUI (when live)</a>
+    </div>
+  </aside>
+
+  <!-- ════════ MAIN ════════ -->
+  <div class="main">
+    <header class="header">
+      <div class="symbol-pick">
+        <span class="pair">BTC/USDT</span>
+        <span class="price mono" id="hdr-price">$67,452.10</span>
+        <span class="chg up" id="hdr-chg">+1.84%</span>
+      </div>
+      <div class="header-right">
+        <div class="conn demo" id="conn">
+          <span class="dot"></span><span id="conn-text">Demo Data</span>
+        </div>
+        <button class="icon-btn" id="theme-btn" title="Toggle theme" aria-label="Toggle theme">
+          <svg id="theme-icon" viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- demo banner -->
+      <div class="banner" id="demo-banner">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span><strong>Demo mode</strong> — showing simulated data. To see live signals, run the backend locally: <code>LLM_PROVIDER=none python src/dashboard/app.py</code> then refresh. This page auto-connects to <code>ws://localhost:8000/ws/signals</code>.</span>
+      </div>
+
+      <!-- KPI ROW -->
+      <div class="section-title">Signal Consensus</div>
+      <div class="kpi-grid">
+        <div class="kpi fade-in">
+          <span class="kpi-accent" style="background:var(--bull)"></span>
+          <div class="kpi-label">Consensus</div>
+          <div class="kpi-value bull" id="kpi-consensus" style="font-size:24px">STRONG BUY</div>
+          <div class="kpi-sub">heuristic judge</div>
+        </div>
+        <div class="kpi fade-in" style="animation-delay:.05s">
+          <span class="kpi-accent" style="background:var(--primary)"></span>
+          <div class="kpi-label">Confidence</div>
+          <div class="kpi-value" id="kpi-conf">72%</div>
+          <div class="conf-track"><div class="conf-fill" id="conf-bar" style="width:72%"></div></div>
+        </div>
+        <div class="kpi fade-in" style="animation-delay:.1s">
+          <span class="kpi-accent" style="background:var(--bull)"></span>
+          <div class="kpi-label">ML Prob. Up</div>
+          <div class="kpi-value bull" id="kpi-ml">0.67</div>
+          <div class="kpi-sub" id="kpi-ml-model">sklearn_hgb</div>
+        </div>
+        <div class="kpi fade-in" style="animation-delay:.15s">
+          <span class="kpi-accent" style="background:var(--warn)"></span>
+          <div class="kpi-label">Fear &amp; Greed</div>
+          <div class="kpi-value warn" id="kpi-fng">28</div>
+          <div class="kpi-sub" id="kpi-fng-label">Fear</div>
+        </div>
+        <div class="kpi fade-in" style="animation-delay:.2s">
+          <span class="kpi-accent" style="background:var(--neutral)"></span>
+          <div class="kpi-label">VIX</div>
+          <div class="kpi-value" id="kpi-vix">19.5</div>
+          <div class="kpi-sub" id="kpi-vix-label">Normal</div>
+        </div>
+      </div>
+
+      <!-- MAIN GRID: chart + side -->
+      <div class="main-grid">
+        <div class="card fade-in" style="animation-delay:.25s">
+          <div class="card-head">
+            <h3>BTC/USDT — 1H</h3>
+            <span class="pill strong_buy" id="chart-signal"><span class="dot"></span>STRONG BUY</span>
+            <span class="meta">Binance · CCXT</span>
+          </div>
+          <div class="chart-wrap"><div id="price-chart"></div></div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <!-- gauges -->
+          <div class="card fade-in" style="animation-delay:.3s">
+            <div class="card-head"><h3>Market Sentiment</h3></div>
+            <div class="card-body">
+              <div class="gauge-row">
+                <div class="gauge">
+                  <svg width="96" height="96" viewBox="0 0 96 96">
+                    <circle class="gauge-track" cx="48" cy="48" r="40" fill="none" stroke-width="9"/>
+                    <circle id="fng-arc" cx="48" cy="48" r="40" fill="none" stroke-width="9" stroke-linecap="round" stroke="var(--warn)" stroke-dasharray="251.3" stroke-dashoffset="181"/>
+                  </svg>
+                  <div class="gauge-val text-warn" id="fng-gauge-val" style="margin-top:-62px">28</div>
+                  <div class="gauge-lbl" style="margin-top:38px">Fear &amp; Greed</div>
+                </div>
+                <div class="gauge">
+                  <svg width="96" height="96" viewBox="0 0 96 96">
+                    <circle class="gauge-track" cx="48" cy="48" r="40" fill="none" stroke-width="9"/>
+                    <circle id="ml-arc" cx="48" cy="48" r="40" fill="none" stroke-width="9" stroke-linecap="round" stroke="var(--bull)" stroke-dasharray="251.3" stroke-dashoffset="83"/>
+                  </svg>
+                  <div class="gauge-val text-bull" id="ml-gauge-val" style="margin-top:-62px">67%</div>
+                  <div class="gauge-lbl" style="margin-top:38px">ML Confidence</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- positions -->
+          <div class="card fade-in" style="animation-delay:.35s">
+            <div class="card-head"><h3>Open Positions</h3><span class="meta" id="pos-mode">paper · dry-run</span></div>
+            <div id="pos-body">
+              <div class="empty">No open positions<br><span style="font-size:11.5px;opacity:.8">Executor is in dry-run mode</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AGENTS -->
+      <div class="section-title">Analyst Agents</div>
+      <div class="agents-grid">
+        <div class="agent fade-in">
+          <div class="agent-top">
+            <div class="agent-name"><span class="agent-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12h4l3-9 4 18 3-9h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Technical</div>
+            <span class="pill buy" id="ta-sig"><span class="dot"></span>BUY</span>
+          </div>
+          <div class="agent-metric"><span class="k">RSI (14)</span><span class="v mono" id="ta-rsi">38.2</span></div>
+          <div class="agent-metric"><span class="k">EMA Cross</span><span class="v text-bull" id="ta-ema">BULL</span></div>
+          <div class="agent-metric"><span class="k">MACD</span><span class="v text-bull" id="ta-macd">+0.0023</span></div>
+        </div>
+        <div class="agent fade-in" style="animation-delay:.05s">
+          <div class="agent-top">
+            <div class="agent-name"><span class="agent-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-4.35-7-10a4 4 0 017-2.65A4 4 0 0119 11c0 5.65-7 10-7 10z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span> Sentiment</div>
+            <span class="pill buy" id="se-sig"><span class="dot"></span>BUY</span>
+          </div>
+          <div class="agent-metric"><span class="k">Fear &amp; Greed</span><span class="v mono" id="se-fng">28</span></div>
+          <div class="agent-metric"><span class="k">VIX</span><span class="v mono" id="se-vix">19.5</span></div>
+          <div class="agent-metric"><span class="k">Regime</span><span class="v" id="se-regime">Contrarian</span></div>
+        </div>
+        <div class="agent fade-in" style="animation-delay:.1s">
+          <div class="agent-top">
+            <div class="agent-name"><span class="agent-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M5 8l7-5 7 5v8l-7 5-7-5V8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 11v7M5 8l7 3 7-3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span> On-Chain</div>
+            <span class="pill neutral" id="oc-sig"><span class="dot"></span>NEUTRAL</span>
+          </div>
+          <div class="agent-metric"><span class="k">Funding Rate</span><span class="v mono" id="oc-fund">+0.010%</span></div>
+          <div class="agent-metric"><span class="k">Bias</span><span class="v" id="oc-bias">Balanced</span></div>
+          <div class="agent-metric"><span class="k">Source</span><span class="v">Binance Perp</span></div>
+        </div>
+        <div class="agent fade-in" style="animation-delay:.15s">
+          <div class="agent-top">
+            <div class="agent-name"><span class="agent-ico"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span> ML Signal</div>
+            <span class="pill buy" id="ml-sig"><span class="dot"></span>BUY</span>
+          </div>
+          <div class="agent-metric"><span class="k">Prob. Up</span><span class="v mono text-bull" id="ml-prob">0.67</span></div>
+          <div class="agent-metric"><span class="k">Backend</span><span class="v" id="ml-backend">sklearn_hgb</span></div>
+          <div class="agent-metric"><span class="k">Features</span><span class="v mono">16</span></div>
+        </div>
+      </div>
+
+      <!-- POLYMARKET -->
+      <div class="main-grid" style="grid-template-columns:1fr 1fr">
+        <div class="card fade-in">
+          <div class="card-head"><h3>Polymarket — 5min BTC</h3><span class="meta">Gamma · CLOB</span></div>
+          <div id="pm-body">
+            <div class="pm-row">
+              <span class="pm-q">BTC Up in next 5 min?</span>
+              <div class="pm-bar"><div class="pm-bar-fill" style="width:54%"></div></div>
+              <span class="pm-prob text-bull">0.54</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-q">BTC above $67,500 by :00?</span>
+              <div class="pm-bar"><div class="pm-bar-fill" style="width:48%"></div></div>
+              <span class="pm-prob">0.48</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-q">BTC Up in next 15 min?</span>
+              <div class="pm-bar"><div class="pm-bar-fill" style="width:57%"></div></div>
+              <span class="pm-prob text-bull">0.57</span>
+            </div>
+          </div>
+        </div>
+        <div class="card fade-in" style="animation-delay:.05s">
+          <div class="card-head"><h3>Risk Assessment</h3><span class="meta">risk manager</span></div>
+          <table>
+            <tbody>
+              <tr><td class="mono" style="color:var(--text-muted)">Position Size</td><td class="mono" style="text-align:right" id="risk-pos">10.8%</td></tr>
+              <tr><td class="mono" style="color:var(--text-muted)">Stop Loss</td><td class="mono text-bear" style="text-align:right" id="risk-sl">2.0%</td></tr>
+              <tr><td class="mono" style="color:var(--text-muted)">Take Profit</td><td class="mono text-bull" style="text-align:right" id="risk-tp">5.0%</td></tr>
+              <tr><td class="mono" style="color:var(--text-muted)">Risk : Reward</td><td class="mono" style="text-align:right" id="risk-rr">1 : 2.5</td></tr>
+              <tr><td class="mono" style="color:var(--text-muted)">VIX Circuit</td><td style="text-align:right"><span class="pill buy" id="risk-vix" style="font-size:11px"><span class="dot"></span>CLEAR</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <footer class="foot">
+      <span class="src"><span class="d"></span> Binance OHLCV</span>
+      <span class="src"><span class="d"></span> Polymarket CLOB</span>
+      <span class="src"><span class="d"></span> alternative.me F&amp;G</span>
+      <span class="src"><span class="d"></span> yfinance VIX</span>
+      <span style="margin-left:auto">Agentra DingBot v0.3.0 · zero-key · Apache-2.0 · <a href="https://github.com/diazMelgarejo/agentra-dingbot">GitHub</a></span>
+    </footer>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   THEME — persisted in localStorage (Clarence: dark surfaces designed)
+   ════════════════════════════════════════════════════════════════════ */
+const root = document.documentElement;
+const saved = localStorage.getItem('agentra-theme');
+if (saved) root.setAttribute('data-theme', saved);
+const sunIcon = '<path d="M12 17a5 5 0 100-10 5 5 0 000 10z" stroke="currentColor" stroke-width="2"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+const moonIcon = '<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+function syncThemeIcon(){ document.getElementById('theme-icon').innerHTML = root.getAttribute('data-theme')==='dark' ? sunIcon : moonIcon; }
+syncThemeIcon();
+document.getElementById('theme-btn').onclick = () => {
+  const next = root.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  localStorage.setItem('agentra-theme', next);
+  syncThemeIcon();
+  if (window._rethemeChart) window._rethemeChart();
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   LIGHTWEIGHT CHARTS — fed by our own CCXT-shaped OHLCV
+   ════════════════════════════════════════════════════════════════════ */
+let chart, candleSeries;
+function themeColors(){
+  const cs = getComputedStyle(root);
+  return {
+    text: cs.getPropertyValue('--text-muted').trim(),
+    grid: cs.getPropertyValue('--border').trim(),
+    up:   cs.getPropertyValue('--bull').trim(),
+    down: cs.getPropertyValue('--bear').trim(),
+  };
+}
+function buildChart(){
+  const el = document.getElementById('price-chart');
+  if (!window.LightweightCharts){ el.innerHTML='<div class="empty">Chart library offline — connect to the internet to load Lightweight Charts.</div>'; return; }
+  const c = themeColors();
+  chart = LightweightCharts.createChart(el, {
+    width: el.clientWidth, height: 380,
+    layout: { background:{type:'solid',color:'transparent'}, textColor:c.text, fontFamily:'JetBrains Mono, monospace', fontSize:11 },
+    grid: { vertLines:{color:c.grid}, horzLines:{color:c.grid} },
+    rightPriceScale: { borderColor:c.grid },
+    timeScale: { borderColor:c.grid, timeVisible:true },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+  candleSeries = chart.addCandlestickSeries({
+    upColor:c.up, downColor:c.down, borderUpColor:c.up, borderDownColor:c.down, wickUpColor:c.up, wickDownColor:c.down,
+  });
+  const seed = genCandles(140);
+  candleSeries.setData(seed);
+  lastCandle = {...seed[seed.length-1]};
+  chart.timeScale().fitContent();
+  window.addEventListener('resize', ()=> chart.applyOptions({width: el.clientWidth}));
+}
+window._rethemeChart = function(){
+  if (!chart) return;
+  const c = themeColors();
+  chart.applyOptions({ layout:{textColor:c.text}, grid:{vertLines:{color:c.grid},horzLines:{color:c.grid}}, rightPriceScale:{borderColor:c.grid}, timeScale:{borderColor:c.grid} });
+  candleSeries.applyOptions({ upColor:c.up, downColor:c.down, borderUpColor:c.up, borderDownColor:c.down, wickUpColor:c.up, wickDownColor:c.down });
+};
+
+/* Deterministic-ish realistic OHLCV (random walk around 67k) */
+function genCandles(n){
+  const out=[]; let price=66000; const now=Math.floor(Date.now()/1000); const step=3600;
+  for(let i=n;i>0;i--){
+    const t=now-i*step;
+    const drift=(Math.random()-0.46)*180;
+    const open=price;
+    const close=Math.max(50000, open+drift);
+    const high=Math.max(open,close)+Math.random()*120;
+    const low=Math.min(open,close)-Math.random()*120;
+    out.push({time:t, open:+open.toFixed(1), high:+high.toFixed(1), low:+low.toFixed(1), close:+close.toFixed(1)});
+    price=close;
+  }
+  return out;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RENDER — maps a state object onto the UI
+   ════════════════════════════════════════════════════════════════════ */
+const SIGNAL_CLASS = s => (s||'neutral').toLowerCase().replace(/\s+/g,'_');
+const fmtSignal = s => (s||'NEUTRAL').replace(/_/g,' ');
+
+function setPill(id, signal){
+  const el=document.getElementById(id); if(!el) return;
+  el.className='pill '+SIGNAL_CLASS(signal);
+  el.innerHTML='<span class="dot"></span>'+fmtSignal(signal);
+}
+function fngLabel(v){ return v<25?'Extreme Fear':v<45?'Fear':v<55?'Neutral':v<75?'Greed':'Extreme Greed'; }
+function vixLabel(v){ return v>=40?'Extreme':v>=30?'Elevated':'Normal'; }
+function consensusClass(s){ s=(s||'').toUpperCase(); return s.includes('BUY')?'bull':s.includes('SELL')?'bear':'neutral'; }
+
+function render(d){
+  // KPIs
+  const cons=d.debate_consensus||'NEUTRAL', conf=Math.round((d.debate_confidence||0)*100);
+  const kc=document.getElementById('kpi-consensus'); kc.textContent=fmtSignal(cons); kc.className='kpi-value '+consensusClass(cons);
+  document.getElementById('kpi-conf').textContent=conf+'%';
+  document.getElementById('conf-bar').style.width=conf+'%';
+  setPill('chart-signal',cons);
+
+  const ml=d.ml||{}, se=d.sentiment||{}, ta=d.technical||{}, oc=d.onchain||{};
+  const prob=ml.prob_up!=null?ml.prob_up:0.5;
+  document.getElementById('kpi-ml').textContent=prob.toFixed(2);
+  document.getElementById('kpi-ml').className='kpi-value '+(prob>0.55?'bull':prob<0.45?'bear':'neutral');
+  document.getElementById('kpi-ml-model').textContent=ml.model_type||'heuristic';
+
+  const fng=se.fear_greed_index!=null?se.fear_greed_index:50;
+  document.getElementById('kpi-fng').textContent=fng;
+  document.getElementById('kpi-fng-label').textContent=fngLabel(fng);
+  const vix=se.vix!=null?se.vix:20;
+  document.getElementById('kpi-vix').textContent=vix.toFixed(1);
+  document.getElementById('kpi-vix-label').textContent=vixLabel(vix);
+
+  // gauges
+  const C=251.3;
+  document.getElementById('fng-arc').setAttribute('stroke-dashoffset', C*(1-fng/100));
+  document.getElementById('fng-gauge-val').textContent=fng;
+  document.getElementById('ml-arc').setAttribute('stroke-dashoffset', C*(1-prob));
+  document.getElementById('ml-gauge-val').textContent=Math.round(prob*100)+'%';
+
+  // agents
+  setPill('ta-sig',ta.signal); 
+  if(ta.rsi_14!=null) document.getElementById('ta-rsi').textContent=ta.rsi_14.toFixed(1);
+  if(ta.ema_cross){ const e=document.getElementById('ta-ema'); e.textContent=ta.ema_cross; e.className='v '+(ta.ema_cross==='BULL'?'text-bull':ta.ema_cross==='BEAR'?'text-bear':''); }
+  setPill('se-sig',se.signal);
+  document.getElementById('se-fng').textContent=fng;
+  document.getElementById('se-vix').textContent=vix.toFixed(1);
+  setPill('oc-sig',oc.signal);
+  if(oc.funding_rate!=null) document.getElementById('oc-fund').textContent=(oc.funding_rate*100).toFixed(3)+'%';
+  setPill('ml-sig',ml.signal);
+  document.getElementById('ml-prob').textContent=prob.toFixed(2);
+  document.getElementById('ml-backend').textContent=ml.model_type||'heuristic';
+
+  // header price (from last candle if present)
+  if(d.ohlcv_4h && d.ohlcv_4h.length && candleSeries){
+    candleSeries.setData(d.ohlcv_4h);
+    const last=d.ohlcv_4h[d.ohlcv_4h.length-1];
+    document.getElementById('hdr-price').textContent='$'+last.close.toLocaleString();
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   LIVE vs DEMO — try real backend WebSocket, else simulate
+   ════════════════════════════════════════════════════════════════════ */
+function setConn(live){
+  const el=document.getElementById('conn');
+  el.className='conn '+(live?'live':'demo');
+  document.getElementById('conn-text').textContent=live?'Live':'Demo Data';
+  document.getElementById('demo-banner').style.display=live?'none':'flex';
+  document.getElementById('freqlink').href=live?'http://localhost:8080/ui/':'#';
+}
+
+function demoState(){
+  // realistic, slightly varying mock
+  const j=()=> (Math.random()-0.5);
+  const fng=28+Math.round(j()*6), prob=0.67+j()*0.06, vix=19.5+j()*1.5, conf=0.72+j()*0.06;
+  return {
+    debate_consensus:'STRONG_BUY', debate_confidence:Math.min(0.95,Math.max(0.5,conf)),
+    technical:{signal:'BUY', rsi_14:38.2+j()*4, ema_cross:'BULL'},
+    sentiment:{signal:'BUY', fear_greed_index:fng, vix:vix},
+    onchain:{signal:'NEUTRAL', funding_rate:0.0001+j()*0.0001},
+    ml:{signal:'BUY', prob_up:Math.min(0.9,Math.max(0.3,prob)), model_type:'sklearn_hgb'},
+  };
+}
+
+let demoTimer=null, lastCandle=null;
+function startDemo(){
+  setConn(false);
+  render(demoState());
+  // gentle live-feel: update metrics + advance the last candle in real time
+  demoTimer=setInterval(()=>{
+    render(demoState());
+    if(candleSeries && lastCandle){
+      const drift=(Math.random()-0.48)*90;
+      lastCandle.close=Math.max(50000, lastCandle.close+drift);
+      lastCandle.high=Math.max(lastCandle.high, lastCandle.close);
+      lastCandle.low=Math.min(lastCandle.low, lastCandle.close);
+      candleSeries.update(lastCandle);
+      document.getElementById('hdr-price').textContent='$'+lastCandle.close.toLocaleString(undefined,{maximumFractionDigits:1});
+    }
+  }, 3500);
+}
+
+function tryLive(){
+  let settled=false;
+  try{
+    const ws=new WebSocket('ws://localhost:8000/ws/signals');
+    const to=setTimeout(()=>{ if(!settled){ settled=true; try{ws.close();}catch(e){} startDemo(); } }, 2500);
+    ws.onopen=()=>{ if(settled)return; settled=true; clearTimeout(to); if(demoTimer)clearInterval(demoTimer); setConn(true); };
+    ws.onmessage=ev=>{ try{ const msg=JSON.parse(ev.data); if(msg.data && Object.keys(msg.data).length) render(msg.data); }catch(e){} };
+    ws.onerror=()=>{ if(!settled){ settled=true; clearTimeout(to); startDemo(); } };
+    ws.onclose=()=>{ setConn(false); if(!demoTimer) startDemo(); };
+  }catch(e){ startDemo(); }
+}
+
+/* boot */
+buildChart();
+tryLive();
+</script>
+</body>
+</html>
