@@ -72,7 +72,7 @@ def make_decision(
     tech_sig: TechnicalSignal,
     fear_sig: FearSignal,
     market_price: float,         # YES token price from CLOB (0–1)
-    bankroll: float = None,
+    bankroll: float | None = None,
 ) -> HybridDecision:
     """
     Core hybrid decision logic. Returns HybridDecision with trade recommendation.

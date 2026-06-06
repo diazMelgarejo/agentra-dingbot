@@ -106,15 +106,15 @@ class FreqTradeConfig(BaseSettings):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", populate_by_name=True
     )
-    exchange: ExchangeConfig = Field(default_factory=ExchangeConfig)
-    llm: LLMConfig = Field(default_factory=LLMConfig)
-    trading: TradingConfig = Field(default_factory=TradingConfig)
-    polymarket: PolymarketConfig = Field(default_factory=PolymarketConfig)
-    alerts: AlertConfig = Field(default_factory=AlertConfig)
-    ml: MLConfig = Field(default_factory=MLConfig)
-    freqtrade: FreqTradeConfig = Field(default_factory=FreqTradeConfig)
+    exchange: ExchangeConfig = ExchangeConfig()
+    llm: LLMConfig = LLMConfig()
+    trading: TradingConfig = TradingConfig()
+    polymarket: PolymarketConfig = PolymarketConfig()
+    alerts: AlertConfig = AlertConfig()
+    ml: MLConfig = MLConfig()
+    freqtrade: FreqTradeConfig = FreqTradeConfig()
     db_path: str = Field("data/trades.db", alias="DB_PATH")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     debug: bool = False

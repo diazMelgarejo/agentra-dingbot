@@ -117,7 +117,23 @@ def run_monte_carlo(
 
 
 def _empty(n_sims, n_trades, capital) -> MCReport:
-    return MCReport(n_sims, n_trades, capital, *([capital]*3), 0.0, *([0.0]*8))
+    return MCReport(
+        n_sims=n_sims,
+        n_trades=n_trades,
+        capital=capital,
+        median_final_equity=capital,
+        p5_final_equity=capital,
+        p95_final_equity=capital,
+        prob_profit=0.0,
+        median_max_dd=0.0,
+        p50_max_dd=0.0,
+        p95_max_dd=0.0,
+        p99_max_dd=0.0,
+        median_sharpe=0.0,
+        p5_sharpe=0.0,
+        p95_sharpe=0.0,
+        ruin_probability=0.0,
+    )
 
 
 def main():

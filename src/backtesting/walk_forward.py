@@ -171,7 +171,7 @@ class WalkForwardValidator:
         The function trains on df_train, generates signals on df_test, and
         returns a list of trade dicts with at minimum a "pnl_pct" key.
         """
-        folds = []
+        folds: list[WalkForwardFold] = []
         splits = self.splits(len(df))
 
         if not splits:
