@@ -26,11 +26,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Skip optional system/binary deps (TA-Lib, pandas-ta) on CI.
-          # TA-Lib needs a system C lib not in Ubuntu 24.04 repos.
-          # pandas-ta has no stable PyPI wheel for Python 3.11.
-          # Both are optional per README — pandas-ta fallback works without TA-Lib.
-          grep -vE '^TA-Lib|^pandas-ta' requirements.txt | pip install -r /dev/stdin
+          # Skip TA-Lib on CI (needs system C lib not in Ubuntu 24.04 repos).
+          # pandas-ta is installed directly — it has a stable 3.12 wheel and is
+          # hard-imported by src/strategies/technical_signals.py.
+          grep -vE '^TA-Lib' requirements.txt | pip install -r /dev/stdin
           if [ -f pyproject.toml ]; then python -m pip install -e ".[dev]" 2>/dev/null || python -m pip install -e . 2>/dev/null || true; fi
           pip install pytest pytest-asyncio pytest-cov ruff mypy
 
