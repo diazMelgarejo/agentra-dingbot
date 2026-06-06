@@ -1,11 +1,13 @@
 """
 core/config.py  —  Agentic SuperBot v0.3.0
 Unified config: merges agentic-trader v0.2.0 + Polymarket Hybrid SuperBot.
-All values are env-var driven; defaults are safe (paper/sandbox mode).
+All values are env-var driven
+defaults are safe (paper/sandbox mode).
 """
 from __future__ import annotations
+
 from functools import lru_cache
-from typing import List
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,7 +30,7 @@ class LLMConfig(BaseSettings):
     ollama_base_url: str = Field("http://localhost:11434", alias="OLLAMA_BASE_URL")
 
     @model_validator(mode="after")
-    def _check_openai_key(self) -> "LLMConfig":
+    def _check_openai_key(self) -> LLMConfig:
         if self.provider == "openai" and not self.openai_api_key:
             raise ValueError("OPENAI_API_KEY must be set when LLM_PROVIDER=openai")
         return self
@@ -37,8 +39,8 @@ class LLMConfig(BaseSettings):
 class TradingConfig(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
     # BTC/ETH spot pairs
-    pairs: List[str] = ["BTC/USDT", "ETH/USDT"]
-    timeframes: List[str] = ["5m", "1h", "4h", "1d"]
+    pairs: list[str] = ["BTC/USDT", "ETH/USDT"]
+    timeframes: list[str] = ["5m", "1h", "4h", "1d"]
     max_position_size_pct: float = Field(25.0, alias="MAX_POSITION_SIZE_PCT")
     max_drawdown_pct: float = Field(10.0, alias="MAX_DRAWDOWN_PCT")
     risk_per_trade_pct: float = Field(1.0, alias="RISK_PER_TRADE_PCT")

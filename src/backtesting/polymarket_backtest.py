@@ -15,10 +15,6 @@ The fee curve is symmetric: fee = fee_rate × p × (1-p) × 4
 """
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass
-from typing import List, Optional
-
 import numpy as np
 import structlog
 
@@ -30,7 +26,8 @@ logger = structlog.get_logger(__name__)
 class BrierScore:
     """
     Mean squared error between predicted probabilities and binary outcomes.
-    A perfect calibrator scores 0.0; a random guess at 0.5 scores ~0.25.
+    A perfect calibrator scores 0.0
+    a random guess at 0.5 scores ~0.25.
 
     Gate criteria (from research):
       - Score < 0.20 (usable calibration)
@@ -38,7 +35,7 @@ class BrierScore:
     """
 
     @staticmethod
-    def compute(probs: List[float], outcomes: List[int]) -> float:
+    def compute(probs: list[float], outcomes: list[int]) -> float:
         """
         Brier score = mean((prob_i - outcome_i)^2).
         Lower is better. Perfect = 0.0, random = 0.25.
@@ -67,7 +64,7 @@ class BrierScore:
         return score < threshold and score < (baseline - margin)
 
     @staticmethod
-    def baseline_score(outcomes: List[int]) -> float:
+    def baseline_score(outcomes: list[int]) -> float:
         """Brier score of a naive predictor that always predicts the base rate."""
         if not outcomes:
             return 0.25

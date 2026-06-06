@@ -4,13 +4,13 @@ Supports REST snapshot + incremental updates.
 Reference: https://agentbets.ai/guides/polymarket-websocket-guide/
 """
 from __future__ import annotations
+
 import asyncio
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import websockets
-
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -21,17 +21,17 @@ class LocalOrderbook:
 
     def __init__(self, token_id: str):
         self.token_id = token_id
-        self.bids: Dict[str, float] = {}   # price_str -> size
-        self.asks: Dict[str, float] = {}
+        self.bids: dict[str, float] = {}   # price_str -> size
+        self.asks: dict[str, float] = {}
         self._ready = asyncio.Event()
 
-    def load_snapshot(self, snapshot: Dict[str, Any]) -> None:
+    def load_snapshot(self, snapshot: dict[str, Any]) -> None:
         self.bids = {lvl["price"]: float(lvl["size"]) for lvl in snapshot.get("bids", [])}
         self.asks = {lvl["price"]: float(lvl["size"]) for lvl in snapshot.get("asks", [])}
         self._ready.set()
         logger.debug(f"Snapshot loaded: {len(self.bids)} bids, {len(self.asks)} asks")
 
-    def apply_update(self, msg: Dict[str, Any]) -> None:
+    def apply_update(self, msg: dict[str, Any]) -> None:
         for bid in msg.get("bids", []):
             p, s = bid["price"], float(bid["size"])
             if s == 0:
@@ -46,21 +46,21 @@ class LocalOrderbook:
                 self.asks[p] = s
 
     @property
-    def best_bid(self) -> Optional[float]:
+    def best_bid(self) -> float | None:
         return max(float(p) for p in self.bids) if self.bids else None
 
     @property
-    def best_ask(self) -> Optional[float]:
+    def best_ask(self) -> float | None:
         return min(float(p) for p in self.asks) if self.asks else None
 
     @property
-    def mid(self) -> Optional[float]:
+    def mid(self) -> float | None:
         if self.best_bid and self.best_ask:
             return (self.best_bid + self.best_ask) / 2
         return None
 
     @property
-    def spread(self) -> Optional[float]:
+    def spread(self) -> float | None:
         if self.best_bid and self.best_ask:
             return self.best_ask - self.best_bid
         return None
@@ -74,7 +74,7 @@ class LocalOrderbook:
         try:
             await asyncio.wait_for(self._ready.wait(), timeout)
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return False
 
 
@@ -89,13 +89,12 @@ class OrderbookStreamer:
     async def start(self) -> None:
         import aiohttp
         # Load REST snapshot first
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{settings.clob_api}/book",
-                params={"token_id": self.token_id}
-            ) as resp:
-                snap = await resp.json()
-                self.book.load_snapshot(snap)
+        async with aiohttp.ClientSession() as session, session.get(
+            f"{settings.clob_api}/book",
+            params={"token_id": self.token_id}
+        ) as resp:
+            snap = await resp.json()
+            self.book.load_snapshot(snap)
 
         self._running = True
         asyncio.create_task(self._stream())

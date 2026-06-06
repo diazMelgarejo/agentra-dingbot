@@ -16,7 +16,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 import structlog
 
@@ -43,7 +42,7 @@ class PermissionResult:
 class ValidationResult:
     """Result of an order sanity check."""
     valid:  bool = False
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 # ── API Permission Check ──────────────────────────────────────────────────────
@@ -111,7 +110,7 @@ async def validate_order(
 
     All checks are explicit — nothing is silently rounded/dropped.
     """
-    errors: List[str] = []
+    errors: list[str] = []
 
     # ── 1. Tick-size rounding ─────────────────────────────────────────────────
     try:
@@ -184,7 +183,7 @@ class KillSwitch:
         ks.disarm()   # removes flag file
     """
 
-    def __init__(self, flag_dir: Optional[str] = None):
+    def __init__(self, flag_dir: str | None = None):
         base = flag_dir or os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(
                 os.path.abspath(__file__)))), "data")
@@ -228,12 +227,12 @@ def is_live_trading_enabled() -> bool:
 
 # ── Startup checks (call once at bot startup) ─────────────────────────────────
 
-async def startup_safety_checks(exchange=None) -> List[str]:
+async def startup_safety_checks(exchange=None) -> list[str]:
     """
     Run all safety checks at startup. Returns a list of warnings/errors.
     Caller should HALT if any returned item starts with 'CRITICAL:'.
     """
-    issues: List[str] = []
+    issues: list[str] = []
 
     # Kill switch check
     ks = KillSwitch()

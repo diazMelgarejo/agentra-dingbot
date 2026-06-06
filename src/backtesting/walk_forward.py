@@ -27,8 +27,10 @@ Usage
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import structlog
@@ -49,12 +51,12 @@ class WalkForwardFold:
     win_rate: float = 0.0
     profit_factor: float = 0.0
     total_pnl_pct: float = 0.0
-    trades: List[Dict] = field(default_factory=list)
+    trades: list[dict] = field(default_factory=list)
 
 
 @dataclass
 class WalkForwardReport:
-    folds: List[WalkForwardFold]
+    folds: list[WalkForwardFold]
     n_folds: int
     data_months: float
 
@@ -93,7 +95,7 @@ class WalkForwardReport:
 
     def passes_gate(self,
                     min_consistent_folds: float = 0.60,
-                    min_median_sharpe: float = 0.30) -> Tuple[bool, str]:
+                    min_median_sharpe: float = 0.30) -> tuple[bool, str]:
         if self.consistent_folds_pct < min_consistent_folds:
             return False, (
                 f"Only {self.consistent_folds_pct:.0%} of folds profitable "
@@ -133,10 +135,11 @@ class WalkForwardValidator:
         self.embargo_bars = embargo_bars
         self.label_horizon = label_horizon
 
-    def splits(self, n: int) -> List[Tuple[range, range]]:
+    def splits(self, n: int) -> list[tuple[range, range]]:
         """
         Generate purged/embargoed (train_idx, test_idx) pairs.
-        Each test window advances by `test_bars`; training expands to fill
+        Each test window advances by `test_bars`
+        training expands to fill
         all available history before the embargo gap.
         """
         result = []
@@ -157,8 +160,8 @@ class WalkForwardValidator:
     def run(
         self,
         df: pd.DataFrame,
-        signal_fn: Callable[[pd.DataFrame, pd.DataFrame], List[Dict]],
-    ) -> List[WalkForwardFold]:
+        signal_fn: Callable[[pd.DataFrame, pd.DataFrame], list[dict]],
+    ) -> list[WalkForwardFold]:
         """
         Run the signal function on each (train, test) split.
 
@@ -195,7 +198,7 @@ class WalkForwardValidator:
 
         return folds
 
-    def report(self, folds: List[WalkForwardFold]) -> WalkForwardReport:
+    def report(self, folds: list[WalkForwardFold]) -> WalkForwardReport:
         if not folds:
             return WalkForwardReport(folds=[], n_folds=0, data_months=0.0)
         # Use test_bars count × folds (timestamps are not integers)
@@ -210,7 +213,7 @@ class WalkForwardValidator:
 # ── Fold scoring helper ──────────────────────────────────────────────────────
 
 def _score_fold(idx: int, df_train: pd.DataFrame, df_test: pd.DataFrame,
-                trades: List[Dict]) -> WalkForwardFold:
+                trades: list[dict]) -> WalkForwardFold:
     import math
     pnls = [t.get("pnl_pct", 0.0) for t in trades]
     n = len(pnls)

@@ -29,11 +29,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
-import os
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
@@ -53,7 +51,7 @@ async def _midnight_reset(cfg) -> None:
     """Reset daily equity reference point at UTC midnight."""
     global _start_of_day_equity
     while True:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         secs = 86400 - (now.hour * 3600 + now.minute * 60 + now.second)
         await asyncio.sleep(secs)
         _start_of_day_equity = 0.0   # reset; will be sampled on next cycle
@@ -78,12 +76,10 @@ def _equity_circuit_fired(current_equity: float) -> bool:
 
 async def _startup_checks(live_mode: bool) -> bool:
     """Run all safety checks. Returns False if any critical issue found."""
-    from agents.executor.safety import (
-        KillSwitch, is_live_trading_enabled, startup_safety_checks
-    )
+    from agents.executor.safety import KillSwitch, is_live_trading_enabled, startup_safety_checks
     from core.config import get_settings
 
-    cfg = get_settings()
+    get_settings()
 
     # 1. Kill switch
     ks = KillSwitch(flag_dir=str(_ROOT / "data"))
@@ -133,8 +129,8 @@ async def _confirm_live() -> bool:
 
 async def run_loop(symbol: str, dry_run: bool, interval_seconds: int = 60) -> None:
     """Continuous cycle loop. Runs until interrupted or kill switch fires."""
-    from core.orchestrator import run_one_cycle
     from agents.executor.safety import KillSwitch
+    from core.orchestrator import run_one_cycle
 
     ks = KillSwitch(flag_dir=str(_ROOT / "data"))
     cycle = 0
@@ -191,10 +187,9 @@ async def main(live_mode: bool, symbol: str, interval: int) -> None:
     dry_run = not live_mode
 
     # Safety gate
-    if live_mode:
-        if not await _confirm_live():
-            print("Aborted.")
-            return
+    if live_mode and not await _confirm_live():
+        print("Aborted.")
+        return
     if not await _startup_checks(live_mode):
         print("Startup safety checks failed — see logs.")
         return

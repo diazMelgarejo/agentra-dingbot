@@ -17,12 +17,11 @@ Run: pytest tests/test_ta_agent.py -v
 """
 from __future__ import annotations
 
-import asyncio
-import pytest
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from typing import Any, Dict, Optional
-
+import pytest
 
 # ── Test data factories ───────────────────────────────────────────────────────
 
@@ -50,7 +49,8 @@ def _df(n: int = 200, *, trend: str = "flat", base: float = 50_000.0,
             np.linspace(base, base * 1.30, n // 2),
             np.linspace(base * 1.30, base * 1.33, n // 2),
         ]) + rng.standard_normal(n) * base * 0.002
-    else:  # flat
+    else:
+        # flat
         close = base + rng.standard_normal(n) * base * volatility
 
     close = np.abs(close)
@@ -71,7 +71,7 @@ def _df_5m(n: int = 100, *, trend: str = "flat", seed: int = 0) -> pd.DataFrame:
     return df
 
 
-def _ind(**overrides) -> Dict[str, Any]:
+def _ind(**overrides) -> dict[str, Any]:
     """Build a minimal indicator dict for scoring tests."""
     defaults = dict(
         rsi_14=50.0, ema_9=100.0, ema_21=98.0, ema_50=95.0, ema_200=90.0,
@@ -94,11 +94,11 @@ class TestComputeAllIndicators:
         assert compute_all_indicators(None) is None
 
     def test_returns_none_when_too_few_bars(self):
-        from agents.technical_analyst.indicators import compute_all_indicators, _MIN_CANDLES
+        from agents.technical_analyst.indicators import _MIN_CANDLES, compute_all_indicators
         assert compute_all_indicators(_df(n=_MIN_CANDLES - 1)) is None
 
     def test_returns_dict_with_min_candles(self):
-        from agents.technical_analyst.indicators import compute_all_indicators, _MIN_CANDLES
+        from agents.technical_analyst.indicators import _MIN_CANDLES, compute_all_indicators
         result = compute_all_indicators(_df(n=_MIN_CANDLES))
         assert result is not None
         assert isinstance(result, dict)
@@ -201,8 +201,9 @@ class TestComputeAllIndicators:
         assert abs(r["close"] - df["close"].iloc[-1]) < 1e-6
 
     def test_no_nan_in_output(self):
-        from agents.technical_analyst.indicators import compute_all_indicators
         import math
+
+        from agents.technical_analyst.indicators import compute_all_indicators
         r = compute_all_indicators(_df())
         assert r is not None
         for k, v in r.items():
@@ -217,7 +218,11 @@ class TestFallbackEquivalence:
     """Verify that pandas fallback produces numerically equivalent results."""
 
     def _compute_both(self, df):
-        from agents.technical_analyst.indicators import _compute_talib, _compute_fallback, _validate_and_enrich
+        from agents.technical_analyst.indicators import (
+            _compute_fallback,
+            _compute_talib,
+            _validate_and_enrich,
+        )
         fb = _validate_and_enrich(_compute_fallback(df))
         try:
             import talib
@@ -275,8 +280,8 @@ class TestValidateAndEnrich:
         assert r["rsi_14"] == 0.0
 
     def test_nan_replaced_with_none(self):
+
         from agents.technical_analyst.indicators import _validate_and_enrich
-        import math
         r = _validate_and_enrich({"rsi_14": float("nan"), "close": 100.0})
         assert r["rsi_14"] is None
 
@@ -442,7 +447,6 @@ class TestEvaluateFast:
 
     def test_cvd_adds_to_direction(self):
         from agents.technical_analyst.agent import _evaluate_fast
-        from core.state import Signal
         ind_bull_cvd = {"macd_fast_hist": 2.0, "rsi_14": 45.0,
                         "close": 101.0, "vwap": 100.0, "cvd": 5000.0, "volume": 50.0}
         ind_bear_cvd = {"macd_fast_hist": 2.0, "rsi_14": 45.0,
@@ -465,7 +469,7 @@ class TestEvaluateFast:
 class TestComputeFastIndicators:
 
     def test_returns_none_on_too_few_bars(self):
-        from agents.technical_analyst.indicators import compute_fast_indicators, _MIN_CANDLES_FAST
+        from agents.technical_analyst.indicators import _MIN_CANDLES_FAST, compute_fast_indicators
         assert compute_fast_indicators(_df_5m(n=_MIN_CANDLES_FAST - 1)) is None
 
     def test_returns_required_keys(self):
@@ -517,7 +521,7 @@ class TestComputeFastIndicators:
 
 class TestAgentRun:
 
-    def _state(self, tfs=None) -> Dict[str, Any]:
+    def _state(self, tfs=None) -> dict[str, Any]:
         dfs = {
             "4h": _df(n=200),
             "1h": _df(n=200, seed=1),
@@ -618,8 +622,9 @@ class TestEdgeCases:
 
     def test_constant_price_does_not_crash(self):
         """Constant price → zero std → BB bands equal → no crash."""
-        from agents.technical_analyst.indicators import compute_all_indicators
         import math
+
+        from agents.technical_analyst.indicators import compute_all_indicators
         dates = pd.date_range("2024-01-01", periods=100, freq="4h", tz="UTC")
         df = pd.DataFrame({
             "open": 50_000.0, "high": 50_000.0,
@@ -635,8 +640,9 @@ class TestEdgeCases:
 
     def test_very_volatile_price_does_not_crash(self):
         """Extreme volatility should not produce NaN/Inf."""
-        from agents.technical_analyst.indicators import compute_all_indicators
         import math
+
+        from agents.technical_analyst.indicators import compute_all_indicators
         rng = np.random.default_rng(99)
         dates = pd.date_range("2024-01-01", periods=200, freq="4h", tz="UTC")
         # Random walk with 20% moves per bar
@@ -654,7 +660,7 @@ class TestEdgeCases:
 
     def test_single_bar_above_min_candles(self):
         """Adding exactly _MIN_CANDLES bars should work."""
-        from agents.technical_analyst.indicators import compute_all_indicators, _MIN_CANDLES
+        from agents.technical_analyst.indicators import _MIN_CANDLES, compute_all_indicators
         result = compute_all_indicators(_df(n=_MIN_CANDLES))
         assert result is not None
 
@@ -678,4 +684,4 @@ class TestEdgeCases:
 
 
 # ── Import to surface Signal ──────────────────────────────────────────────────
-from core.state import Signal
+from core.state import Signal  # noqa: E402

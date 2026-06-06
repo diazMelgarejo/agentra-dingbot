@@ -4,12 +4,13 @@ All tests are fully mocked — no API keys or network required.
 Covers: CCXT fetcher, Fear&Greed, VIX, Polymarket REST, unified snapshot.
 """
 from __future__ import annotations
-import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import AsyncMock, MagicMock, patch
-from contextlib import asynccontextmanager
 
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 # ── Factories ─────────────────────────────────────────────────────────────────
 
@@ -104,7 +105,7 @@ class TestFearGreed:
         from data.fear_greed import fetch_fear_greed
         payload = {"data": [{"value":"35","value_classification":"Fear","timestamp":"0"}]}
         with patch("data.fear_greed.aiohttp.ClientSession") as cls:
-            inst = AsyncMock()
+            AsyncMock()
             resp = AsyncMock()
             resp.json   = AsyncMock(return_value=payload)
             resp.raise_for_status = MagicMock()
@@ -201,7 +202,9 @@ class TestPolymarketFetcher:
             resp = AsyncMock()
             resp.json = AsyncMock(return_value={"price": p})
             resp.raise_for_status = MagicMock()
-            cm = MagicMock(); cm.__aenter__ = AsyncMock(return_value=resp); cm.__aexit__ = AsyncMock(return_value=False)
+            cm = MagicMock()
+            cm.__aenter__ = AsyncMock(return_value=resp)
+            cm.__aexit__ = AsyncMock(return_value=False)
             sess.get = MagicMock(return_value=cm)
             assert await fetch_yes_price(sess, "tok") is None, f"price {p} should be None"
 
@@ -220,9 +223,14 @@ class TestPolymarketFetcher:
             {"question":"Will ETH be up in 5min?","id":"2","conditionId":"c2","clobTokenIds":["t2"],"endDate":"","volume24hr":500},
             {"question":"US election 2026?","id":"3","conditionId":"c3","clobTokenIds":["t3"],"endDate":"","volume24hr":2000},
         ]
-        resp = AsyncMock(); resp.json = AsyncMock(return_value=raw); resp.raise_for_status = MagicMock()
-        cm = MagicMock(); cm.__aenter__ = AsyncMock(return_value=resp); cm.__aexit__ = AsyncMock(return_value=False)
-        sess = MagicMock(); sess.get = MagicMock(return_value=cm)
+        resp = AsyncMock()
+        resp.json = AsyncMock(return_value=raw)
+        resp.raise_for_status = MagicMock()
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        sess = MagicMock()
+        sess.get = MagicMock(return_value=cm)
         markets = await fetch_btc_eth_markets(sess, tags=["crypto"])
         assert len(markets) == 2
         assert all("btc" in m.question.lower() or "eth" in m.question.lower() for m in markets)
@@ -230,16 +238,24 @@ class TestPolymarketFetcher:
     @pytest.mark.asyncio
     async def test_farmable_markets_filters_by_spread(self):
         """Only markets with spread < 0.06 should be returned as farmable."""
-        from data.polymarket import find_farmable_markets
         from core.state import PolymarketMarket
+        from data.polymarket import find_farmable_markets
         m1 = PolymarketMarket(token_id="tok1", question="BTC up?", yes_price=0.50, volume_24h=1000)
         m2 = PolymarketMarket(token_id="tok2", question="ETH up?", yes_price=0.48, volume_24h=500)
         wide_book  = {"bids":[{"price":"0.45","size":"50"}],"asks":[{"price":"0.55","size":"50"}]}  # spread=0.10
         tight_book = {"bids":[{"price":"0.49","size":"50"}],"asks":[{"price":"0.52","size":"50"}]}  # spread=0.03
-        resp_wide  = AsyncMock(); resp_wide.json  = AsyncMock(return_value=wide_book);  resp_wide.raise_for_status  = MagicMock()
-        resp_tight = AsyncMock(); resp_tight.json = AsyncMock(return_value=tight_book); resp_tight.raise_for_status = MagicMock()
-        cm_wide  = MagicMock(); cm_wide.__aenter__  = AsyncMock(return_value=resp_wide);  cm_wide.__aexit__  = AsyncMock(return_value=False)
-        cm_tight = MagicMock(); cm_tight.__aenter__ = AsyncMock(return_value=resp_tight); cm_tight.__aexit__ = AsyncMock(return_value=False)
+        resp_wide  = AsyncMock()
+        resp_wide.json  = AsyncMock(return_value=wide_book)
+        resp_wide.raise_for_status  = MagicMock()
+        resp_tight = AsyncMock()
+        resp_tight.json = AsyncMock(return_value=tight_book)
+        resp_tight.raise_for_status = MagicMock()
+        cm_wide  = MagicMock()
+        cm_wide.__aenter__  = AsyncMock(return_value=resp_wide)
+        cm_wide.__aexit__  = AsyncMock(return_value=False)
+        cm_tight = MagicMock()
+        cm_tight.__aenter__ = AsyncMock(return_value=resp_tight)
+        cm_tight.__aexit__ = AsyncMock(return_value=False)
         sess = MagicMock()
         sess.get = MagicMock(side_effect=[cm_wide, cm_tight])
         with patch("data.polymarket.asyncio.sleep", AsyncMock()):

@@ -12,11 +12,10 @@ Logic (from X hybrid bots pattern):
   VIX > 40                                  → circuit-breaker risk → skip trade
 """
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -36,7 +35,7 @@ VIX_EXTREME  = 40
 class FearSignal:
     regime: str            # "EXTREME_FEAR" | "FEAR" | "NEUTRAL" | "GREED" | "EXTREME_GREED"
     fg_value: int          # 0–100
-    vix: Optional[float]   # latest VIX close
+    vix: float | None   # latest VIX close
     micro_impulse: str     # "BULLISH" | "BEARISH" | "NEUTRAL"
     vix_risk_level: str    # "NORMAL" | "ELEVATED" | "EXTREME"
     size_multiplier: float # scale down in high-VIX env
@@ -93,8 +92,8 @@ def compute_rolling_correlation(df_5m: pd.DataFrame, fg_value: int, window: int 
 
 def generate_fear_signal(
     fg_data: dict,
-    vix: Optional[float],
-    df_5m: Optional[pd.DataFrame] = None,
+    vix: float | None,
+    df_5m: pd.DataFrame | None = None,
 ) -> FearSignal:
     """
     Build FearSignal from Fear & Greed dict, VIX float, and optional 5m OHLCV.

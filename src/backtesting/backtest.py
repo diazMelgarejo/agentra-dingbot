@@ -17,10 +17,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -30,9 +28,9 @@ import structlog
 _ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_ROOT / "src"))
 
-from backtesting.monte_carlo import run_monte_carlo, TradeResult
-from backtesting.signal_replay import SignalRecord, compute_metrics, replay_as_trades
-from backtesting.walk_forward import WalkForwardValidator
+from backtesting.monte_carlo import TradeResult, run_monte_carlo  # noqa: E402
+from backtesting.signal_replay import SignalRecord, compute_metrics, replay_as_trades  # noqa: E402
+from backtesting.walk_forward import WalkForwardValidator  # noqa: E402
 
 logger = structlog.get_logger("backtest")
 

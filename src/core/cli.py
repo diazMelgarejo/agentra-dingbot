@@ -110,7 +110,7 @@ async def _cmd_run(symbol: str, dry_run: bool) -> None:
 
 def _cmd_dashboard(host: str, port: int, reload: bool) -> None:
     import uvicorn
-    from dashboard.app import create_app
+
 
     logger.info("dashboard_start", host=host, port=port)
     uvicorn.run(

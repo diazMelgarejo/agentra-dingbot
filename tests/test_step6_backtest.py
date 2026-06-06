@@ -15,15 +15,12 @@ One behaviour per test, descriptive names.
 """
 from __future__ import annotations
 
-import json
 import os
 import tempfile
-from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 import pytest
-
 
 # ── Factories ────────────────────────────────────────────────────────────────
 
@@ -105,8 +102,9 @@ class TestMonteCarlo:
 
     def test_losing_strategy_has_high_ruin_probability(self):
         """A 25% win-rate strategy with 100 trades should sometimes hit ruin."""
-        from src.backtesting.monte_carlo import run_monte_carlo, TradeResult
         import numpy as np
+
+        from src.backtesting.monte_carlo import TradeResult, run_monte_carlo
         rng = np.random.default_rng(0)
         trades = [TradeResult(pnl_pct=float(rng.uniform(0.01, 0.04)
                   if rng.random() < 0.25 else -rng.uniform(0.01, 0.03)))
@@ -140,14 +138,14 @@ class TestMonteCarlo:
 
     def test_fewer_than_5_trades_returns_empty_report(self):
         """Too few trades → empty report without crash."""
-        from src.backtesting.monte_carlo import run_monte_carlo, TradeResult
+        from src.backtesting.monte_carlo import TradeResult, run_monte_carlo
         r = run_monte_carlo([TradeResult(pnl_pct=0.01)], n_sims=100, capital=1000.0)
         assert r.n_trades <= 4
         assert r.prob_profit == 0.0  # empty
 
     def test_all_winning_trades_gives_zero_ruin(self):
         """Pure winning trades should never hit ruin threshold."""
-        from src.backtesting.monte_carlo import run_monte_carlo, TradeResult
+        from src.backtesting.monte_carlo import TradeResult, run_monte_carlo
         trades = [TradeResult(pnl_pct=0.01)] * 30
         r = run_monte_carlo(trades, n_sims=500, capital=1000.0)
         assert r.ruin_probability == 0.0
@@ -247,7 +245,7 @@ class TestWalkForward:
 
     def test_gate_passes_when_most_folds_profitable(self):
         """≥60% profitable folds with positive Sharpe should pass the gate."""
-        from src.backtesting.walk_forward import WalkForwardValidator, WalkForwardFold
+        from src.backtesting.walk_forward import WalkForwardFold
         folds = [
             WalkForwardFold(i, None, None, None, None,
                             n_trades=10, total_pnl_pct=0.05, sharpe=0.8)
@@ -291,7 +289,7 @@ class TestSignalReplay:
 
     def test_save_and_load_roundtrip(self):
         """Signals saved to JSON must load back with identical values."""
-        from src.backtesting.signal_replay import save_signals, load_signals
+        from src.backtesting.signal_replay import load_signals, save_signals
         records = [self._record("BUY", 50000), self._record("SELL", 52000)]
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "signals.json")
@@ -317,8 +315,8 @@ class TestSignalReplay:
         from src.backtesting.signal_replay import SignalRecord, replay_as_trades
         df = _ohlcv(500)
         # Use actual timestamps from the df so price lookup succeeds
-        early_ts  = df.index[10].isoformat()   # early bar (lower price in flat walk)
-        later_ts  = df.index[400].isoformat()  # later bar
+        df.index[10].isoformat()   # early bar (lower price in flat walk)
+        df.index[400].isoformat()  # later bar
         # Use a df with a known uptrend to ensure positive P&L
         import numpy as np
         import pandas as pd
@@ -352,8 +350,8 @@ class TestSignalReplay:
 
     def test_compute_metrics_returns_expected_keys(self):
         """BacktestMetrics must expose sharpe, win_rate, profit_factor, max_dd."""
-        from src.backtesting.signal_replay import compute_metrics
         from src.backtesting.monte_carlo import TradeResult
+        from src.backtesting.signal_replay import compute_metrics
         trades = [TradeResult(pnl_pct=0.02)] * 5 + [TradeResult(pnl_pct=-0.01)] * 3
         m = compute_metrics(trades)
         for attr in ["sharpe", "win_rate", "profit_factor", "max_dd", "total_pnl_pct"]:
@@ -361,8 +359,8 @@ class TestSignalReplay:
 
     def test_win_rate_correct_for_known_trades(self):
         """5 wins + 3 losses → win_rate = 5/8 = 0.625."""
-        from src.backtesting.signal_replay import compute_metrics
         from src.backtesting.monte_carlo import TradeResult
+        from src.backtesting.signal_replay import compute_metrics
         trades = [TradeResult(pnl_pct=0.02)] * 5 + [TradeResult(pnl_pct=-0.01)] * 3
         m = compute_metrics(trades)
         assert abs(m.win_rate - 0.625) < 0.001

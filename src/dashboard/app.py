@@ -16,13 +16,12 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 logger = structlog.get_logger(__name__)
 
@@ -31,8 +30,8 @@ _TV_ALLOWED_IPS = {"52.89.214.238", "34.212.75.30", "54.218.53.128", "52.32.178.
 TRADINGVIEW_SECRET = os.getenv("TRADINGVIEW_WEBHOOK_SECRET", "")
 
 # ── In-process shared state ───────────────────────────────────────────────────
-_latest_state: Dict[str, Any] = {}
-_external_signals: List[Dict[str, Any]] = []
+_latest_state: dict[str, Any] = {}
+_external_signals: list[dict[str, Any]] = []
 _MAX_STORED_SIGNALS = 50
 
 
@@ -46,7 +45,7 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health():
         return {"status": "ok", "version": "0.3.0",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "pending_tv_signals": len(_external_signals)}
 
     @app.get("/api/signals")
@@ -91,12 +90,12 @@ def create_app() -> FastAPI:
         try:
             data = json.loads(body)
         except json.JSONDecodeError as exc:
-            raise HTTPException(400, f"Invalid JSON: {exc}")
+            raise HTTPException(400, f"Invalid JSON: {exc}") from exc
 
         # Normalise symbol (BINANCE:BTCUSDT → BTC/USDT)
         raw_sym = data.get("symbol", "")
         data["symbol_normalised"] = _normalise_symbol(raw_sym)
-        data["received_at"] = datetime.now(timezone.utc).isoformat()
+        data["received_at"] = datetime.now(UTC).isoformat()
         data["source_ip"] = client_ip
 
         global _external_signals
@@ -131,7 +130,7 @@ def create_app() -> FastAPI:
             while True:
                 await websocket.send_json({
                     "type": "cycle_update" if _latest_state else "heartbeat",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "data": _serialize_state(_latest_state),
                 })
                 await asyncio.sleep(60)
@@ -163,17 +162,21 @@ def _normalise_symbol(raw: str) -> str:
     return s
 
 
-def _serialize_state(state: Dict[str, Any]) -> Dict[str, Any]:
+def _serialize_state(state: dict[str, Any]) -> dict[str, Any]:
     import dataclasses
     from enum import Enum
 
     def _c(v):
-        if isinstance(v, Enum): return v.value
-        if isinstance(v, datetime): return v.isoformat()
+        if isinstance(v, Enum):
+            return v.value
+        if isinstance(v, datetime):
+            return v.isoformat()
         if dataclasses.is_dataclass(v) and not isinstance(v, type):
             return {f.name: _c(getattr(v, f.name)) for f in dataclasses.fields(v)}
-        if isinstance(v, dict): return {k: _c(val) for k, val in v.items()}
-        if isinstance(v, list): return [_c(i) for i in v]
+        if isinstance(v, dict):
+            return {k: _c(val) for k, val in v.items()}
+        if isinstance(v, list):
+            return [_c(i) for i in v]
         return v
 
     if dataclasses.is_dataclass(state) and not isinstance(state, type):
@@ -181,7 +184,7 @@ def _serialize_state(state: Dict[str, Any]) -> Dict[str, Any]:
     return _c(dict(state))
 
 
-def get_latest_tv_signal(symbol: str) -> Optional[Dict[str, Any]]:
+def get_latest_tv_signal(symbol: str) -> dict[str, Any] | None:
     """Called by agents to read the most recent injected TradingView signal."""
     norm = symbol.upper().replace("-", "/")
     for s in reversed(_external_signals):

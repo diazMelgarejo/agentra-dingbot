@@ -17,11 +17,10 @@ Usage:
             print(f"mid={book.mid:.3f} spread={book.spread:.4f}")
 """
 from __future__ import annotations
+
 import asyncio
 import json
-import logging
-from contextlib import asynccontextmanager
-from typing import Dict, Optional
+from contextlib import asynccontextmanager, suppress
 
 import structlog
 
@@ -38,8 +37,8 @@ class LocalOrderbook:
 
     def __init__(self, token_id: str):
         self.token_id = token_id
-        self.bids: Dict[str, float] = {}   # price_str → size
-        self.asks: Dict[str, float] = {}
+        self.bids: dict[str, float] = {}   # price_str → size
+        self.asks: dict[str, float] = {}
         self.is_live: bool = True
         self._ready = asyncio.Event()
 
@@ -55,30 +54,34 @@ class LocalOrderbook:
     def apply_delta(self, msg: dict) -> None:
         for b in msg.get("bids", []):
             p, s = b["price"], float(b["size"])
-            if s == 0: self.bids.pop(p, None)
-            else:      self.bids[p] = s
+            if s == 0:
+                self.bids.pop(p, None)
+            else:
+                self.bids[p] = s
         for a in msg.get("asks", []):
             p, s = a["price"], float(a["size"])
-            if s == 0: self.asks.pop(p, None)
-            else:      self.asks[p] = s
+            if s == 0:
+                self.asks.pop(p, None)
+            else:
+                self.asks[p] = s
 
     # ── Computed properties ───────────────────────────────────────────────────
 
     @property
-    def best_bid(self) -> Optional[float]:
+    def best_bid(self) -> float | None:
         return max(float(p) for p in self.bids) if self.bids else None
 
     @property
-    def best_ask(self) -> Optional[float]:
+    def best_ask(self) -> float | None:
         return min(float(p) for p in self.asks) if self.asks else None
 
     @property
-    def mid(self) -> Optional[float]:
+    def mid(self) -> float | None:
         bb, ba = self.best_bid, self.best_ask
         return (bb + ba) / 2 if bb and ba else None
 
     @property
-    def spread(self) -> Optional[float]:
+    def spread(self) -> float | None:
         bb, ba = self.best_bid, self.best_ask
         return round(ba - bb, 4) if bb and ba else None
 
@@ -91,7 +94,7 @@ class LocalOrderbook:
         try:
             await asyncio.wait_for(self._ready.wait(), timeout)
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return False
 
 
@@ -99,12 +102,14 @@ class LocalOrderbook:
 async def orderbook_stream(token_id: str):
     """
     Async context manager: yields a LocalOrderbook kept live by a background task.
-    REST snapshot is fetched first; WebSocket delivers incremental deltas.
+    REST snapshot is fetched first
+    WebSocket delivers incremental deltas.
 
     async with orderbook_stream("token-id") as book:
         price = book.mid    # always fresh
     """
     import aiohttp
+
     from core.config import get_settings
 
     clob_api = get_settings().polymarket.clob_api
@@ -112,15 +117,14 @@ async def orderbook_stream(token_id: str):
 
     # ── Step 1: REST snapshot ─────────────────────────────────────────────────
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{clob_api}/book",
-                params={"token_id": token_id},
-                timeout=aiohttp.ClientTimeout(total=8),
-            ) as resp:
-                resp.raise_for_status()
-                snap = await resp.json(content_type=None)
-                book.load_snapshot(snap)
+        async with aiohttp.ClientSession() as session, session.get(
+            f"{clob_api}/book",
+            params={"token_id": token_id},
+            timeout=aiohttp.ClientTimeout(total=8),
+        ) as resp:
+            resp.raise_for_status()
+            snap = await resp.json(content_type=None)
+            book.load_snapshot(snap)
     except Exception as exc:
         logger.warning("ob_snapshot_failed", token=token_id[:16], error=str(exc))
 
@@ -132,10 +136,8 @@ async def orderbook_stream(token_id: str):
     finally:
         book.is_live = False
         ws_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await ws_task
-        except asyncio.CancelledError:
-            pass
 
 
 async def _stream_loop(book: LocalOrderbook, token_id: str) -> None:

@@ -2,9 +2,11 @@
 tests/test_risk_manager.py
 Tests for risk manager signal gating and position sizing.
 """
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
-from core.state import Signal, RiskAssessment, IndicatorSnapshot, Timeframe
+
+from core.state import IndicatorSnapshot, Signal
 
 
 def _tech(close=50_000.0, atr=1_200.0):
@@ -61,7 +63,7 @@ async def test_strong_buy_larger_than_buy():
 
 @pytest.mark.asyncio
 async def test_max_loss_cap_enforced():
-    from agents.risk_manager.agent import run, _MAX_LOSS_PCT
+    from agents.risk_manager.agent import _MAX_LOSS_PCT, run
     # Force high ATR to trigger cap
     result = await run(_state(signal=Signal.STRONG_BUY, confidence=1.0, tech=_tech(atr=50_000)))
     r = result["risk"]
@@ -71,7 +73,7 @@ async def test_max_loss_cap_enforced():
 
 @pytest.mark.asyncio
 async def test_fallback_sl_when_no_atr():
-    from agents.risk_manager.agent import run, _FALLBACK_SL_PCT
+    from agents.risk_manager.agent import _FALLBACK_SL_PCT, run
     tech = _tech(atr=0)  # atr=0 triggers fallback
     tech.atr_14 = None
     result = await run(_state(signal=Signal.BUY, confidence=0.7, tech=tech))

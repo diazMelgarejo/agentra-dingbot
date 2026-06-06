@@ -4,14 +4,17 @@ MERGED: ATR-based spot risk (from v0.2.0) + Kelly circuit breaker (from Polymark
 Handles both spot BTC/ETH trade risk AND Polymarket position risk.
 """
 from __future__ import annotations
-from typing import Any, Dict
+
+from typing import Any
+
 import structlog
-from core.state import RiskAssessment, Signal
+
 from backtesting.polymarket_backtest import equity_circuit_breaker
+from core.state import RiskAssessment, Signal
 
 logger = structlog.get_logger(__name__)
 
-_RISK_RULES: Dict[Signal, Dict[str, float]] = {
+_RISK_RULES: dict[Signal, dict[str, float]] = {
     Signal.STRONG_BUY:  {"position_pct": 25.0, "sl_atr_mult": 1.5, "tp_rr": 3.0},
     Signal.BUY:         {"position_pct": 15.0, "sl_atr_mult": 2.0, "tp_rr": 2.5},
     Signal.SELL:        {"position_pct": 10.0, "sl_atr_mult": 2.0, "tp_rr": 2.0},
@@ -21,7 +24,7 @@ _MAX_LOSS_PCT    = 10.0
 _FALLBACK_SL_PCT = 2.5
 
 
-async def run(state: Dict[str, Any]) -> Dict[str, Any]:
+async def run(state: dict[str, Any]) -> dict[str, Any]:
     from core.config import get_settings
     consensus  = state.get("debate_consensus", Signal.NEUTRAL)
     confidence = state.get("debate_confidence", 0.0)
@@ -38,8 +41,7 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
     # Uses EQUITY (NAV incl. open P&L), NOT balance — see LESSONS.md L-19
     current_equity = float(state.get("equity", 0.0) or 0.0)
     start_equity   = float(state.get("start_of_day_equity", 0.0) or 0.0)
-    if current_equity > 0 and start_equity > 0:
-        if equity_circuit_breaker(current_equity, start_equity,
+    if current_equity > 0 and start_equity > 0 and equity_circuit_breaker(current_equity, start_equity,
                                   settings.polymarket.daily_drawdown_limit_pct / 100.0):
             return _reject(
                 f"Daily equity circuit breaker: equity dropped "
@@ -100,6 +102,6 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
     return {"risk": assessment}
 
 
-def _reject(reason: str) -> Dict[str, Any]:
+def _reject(reason: str) -> dict[str, Any]:
     logger.info("risk_rejected", reason=reason)
     return {"risk": RiskAssessment(approved=False, reasoning=reason)}

@@ -25,22 +25,21 @@ from __future__ import annotations
 
 import json
 import os
-import time
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import pandas as pd
 import structlog
 
 from core.state import Signal
-from ml.features import build_features, latest_feature_row, FEATURE_COLUMNS
-from ml.labels import make_labels, align_xy
+from ml.features import FEATURE_COLUMNS, build_features, latest_feature_row
+from ml.labels import align_xy, make_labels
 from ml.model import MLSignalModel
 
 logger = structlog.get_logger(__name__)
 
 # In-process model cache: {symbol: (MLSignalModel, meta_dict)}
-_MODEL_CACHE: Dict[str, Tuple[MLSignalModel, Dict[str, Any]]] = {}
+_MODEL_CACHE: dict[str, tuple[MLSignalModel, dict[str, Any]]] = {}
 
 
 class FreqAIBridge:
@@ -66,7 +65,7 @@ class FreqAIBridge:
 
     # ── Metadata ──────────────────────────────────────────────────────────────────
 
-    def _load_meta(self, symbol: str) -> Dict[str, Any]:
+    def _load_meta(self, symbol: str) -> dict[str, Any]:
         p = self._meta_path(symbol)
         if os.path.exists(p):
             try:
@@ -75,9 +74,10 @@ class FreqAIBridge:
                 return {}
         return {}
 
-    def _save_meta(self, symbol: str, meta: Dict[str, Any]) -> None:
+    def _save_meta(self, symbol: str, meta: dict[str, Any]) -> None:
         try:
-            json.dump(meta, open(self._meta_path(symbol), "w"), indent=2)
+            with open(self._meta_path(symbol), "w") as _f:
+                json.dump(meta, _f, indent=2)
         except Exception as exc:
             logger.warning("ml_meta_save_failed", error=str(exc))
 
@@ -94,7 +94,7 @@ class FreqAIBridge:
 
     # ── Training ────────────────────────────────────────────────────────────────────
 
-    def train(self, df: pd.DataFrame, symbol: str) -> Optional[MLSignalModel]:
+    def train(self, df: pd.DataFrame, symbol: str) -> MLSignalModel | None:
         """Train (or retrain) a model on the supplied history and persist it."""
         feats = build_features(df)
         labels = make_labels(df, horizon=self.cfg.label_horizon,
@@ -114,7 +114,7 @@ class FreqAIBridge:
             "symbol": symbol,
             "backend": model.backend,
             "n_train_samples": model.n_train_samples,
-            "trained_at": datetime.now(timezone.utc).isoformat(),
+            "trained_at": datetime.now(UTC).isoformat(),
             "cycles_since_train": 0,
             "horizon": self.cfg.label_horizon,
         }
@@ -127,7 +127,8 @@ class FreqAIBridge:
     # ── Model retrieval (cache → disk → train) ──────────────────────────────────────
 
     def _get_model(self, df: pd.DataFrame, symbol: str,
-                   force_retrain: bool) -> Optional[Tuple[MLSignalModel, Dict[str, Any]]]:
+                   force_retrain:
+                       bool) -> tuple[MLSignalModel, dict[str, Any]] | None:
         if self._needs_retrain(symbol, force_retrain):
             model = self.train(df, symbol)
             if model is None:
@@ -161,8 +162,9 @@ class FreqAIBridge:
         self,
         df: pd.DataFrame,
         symbol: str = "BTC/USDT",
-        force_retrain: bool = False,
-    ) -> Tuple[Signal, float, Optional[float], Dict[str, Any]]:
+        force_retrain:
+            bool = False,
+    ) -> tuple[Signal, float, float | None, dict[str, Any]]:
         """
         Produce a directional ML signal for the latest bar.
 

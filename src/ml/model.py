@@ -11,11 +11,13 @@ The same `MLSignalModel` interface wraps all three so the rest of the system
 (bridge, agent, tests) is backend-agnostic — exactly mirroring the
 TA-Lib → pandas-ta fallback pattern used in indicators.py.
 
-Persistence is via joblib; a sidecar dict records backend + train metadata.
+Persistence is via joblib
+a sidecar dict records backend + train metadata.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import structlog
@@ -50,7 +52,8 @@ class MLSignalModel:
         m = MLSignalModel(model_type="lightgbm", random_state=42)
         m.fit(X, y)                 # X: feature DataFrame, y: 0/1 Series
         p = m.predict_proba_up(X)   # np.ndarray of P(up) per row
-        m.save(path); MLSignalModel.load(path)
+        m.save(path)
+        MLSignalModel.load(path)
     """
 
     def __init__(self, model_type: str = "lightgbm", random_state: int = 42):
@@ -58,13 +61,13 @@ class MLSignalModel:
         self.backend = _select_backend(model_type)
         self.random_state = random_state
         self._model: Any = None
-        self.feature_names: List[str] = []
+        self.feature_names: list[str] = []
         self.n_train_samples: int = 0
         self._heuristic_feature = "roll_mean_5"  # sign → up/down
 
     # ── Training ──────────────────────────────────────────────────────────────
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "MLSignalModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> MLSignalModel:
         self.feature_names = list(X.columns)
         self.n_train_samples = int(len(X))
 
@@ -95,7 +98,8 @@ class MLSignalModel:
             # HistGBM tolerates NaN natively — no imputation needed
             self._model.fit(X.values, y.values)
 
-        else:  # heuristic — nothing to train
+        else:
+            # heuristic — nothing to train
             self._model = None
 
         logger.info("ml_fit_done", backend=self.backend, n=self.n_train_samples,
@@ -126,7 +130,7 @@ class MLSignalModel:
 
     # ── Introspection ─────────────────────────────────────────────────────────────
 
-    def feature_importance(self, top_k: int = 5) -> List[Dict[str, float]]:
+    def feature_importance(self, top_k: int = 5) -> list[dict[str, float]]:
         """Return the top-k features by importance as [{"feature","importance"}]."""
         if self._model is None or not self.feature_names:
             return []
@@ -162,7 +166,7 @@ class MLSignalModel:
         logger.info("ml_model_saved", path=path, backend=self.backend)
 
     @classmethod
-    def load(cls, path: str) -> "MLSignalModel":
+    def load(cls, path: str) -> MLSignalModel:
         import joblib
         data = joblib.load(path)
         m = cls(model_type=data.get("requested_type", "lightgbm"),

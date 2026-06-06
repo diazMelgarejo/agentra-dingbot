@@ -13,13 +13,14 @@ References:
   - Fractional Kelly (0.25x) recommended for real-world risk management
 """
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
-from strategies.technical_signals import TechnicalSignal
-from strategies.fear_filter import FearSignal, fear_confirms_direction
 from core.config import get_settings
+from strategies.fear_filter import FearSignal, fear_confirms_direction
+from strategies.technical_signals import TechnicalSignal
+
 settings = get_settings()
 
 logger = logging.getLogger(__name__)
@@ -113,7 +114,8 @@ def make_decision(
         lr = 1.0 + combined_conf * 2.0   # scale: 1.0–3.0
         posterior = bayesian_update(prior, lr)
         edge_pct = (posterior - market_price) * 100
-    else:  # NO
+    else:
+        # NO
         prior = 1 - market_price          # NO token implicit price
         lr = 1.0 + combined_conf * 2.0
         posterior_no = bayesian_update(prior, lr)

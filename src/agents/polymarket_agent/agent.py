@@ -9,18 +9,20 @@ Pipeline:
   4. Writes PolymarketDecision to state for executor
 """
 from __future__ import annotations
-from typing import Any, Dict
+
+from typing import Any
+
 import structlog
 
-from core.state import MarketDirection, PolymarketDecision, Signal
+from core.state import MarketDirection, PolymarketDecision
 
 logger = structlog.get_logger(__name__)
 
 
-async def run(state: Dict[str, Any]) -> Dict[str, Any]:
-    from strategies.technical_signals import generate_technical_signal, TechnicalSignal
-    from strategies.fear_filter       import generate_fear_signal, FearSignal, fear_confirms_direction
-    from strategies.hybrid_decision   import make_decision
+async def run(state: dict[str, Any]) -> dict[str, Any]:
+    from strategies.fear_filter import FearSignal, generate_fear_signal
+    from strategies.hybrid_decision import make_decision
+    from strategies.technical_signals import TechnicalSignal, generate_technical_signal
 
     ohlcv     = state.get("ohlcv", {})
     sentiment = state.get("sentiment")

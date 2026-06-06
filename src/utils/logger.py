@@ -1,15 +1,23 @@
 """SQLite trade logger using SQLAlchemy Core."""
 from __future__ import annotations
+
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
-
-from sqlalchemy import (
-    Column, DateTime, Float, Integer, MetaData, String, Table, create_engine, text
-)
+from typing import Any
 
 from config.settings import settings
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +49,7 @@ trades_table = Table(
 _meta.create_all(_engine)
 
 
-def log_trade(trade: Dict[str, Any]) -> None:
+def log_trade(trade: dict[str, Any]) -> None:
     try:
         with _engine.begin() as conn:
             conn.execute(trades_table.insert().values(**{

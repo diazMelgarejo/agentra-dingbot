@@ -2,14 +2,11 @@
 tests/test_technical_analyst.py
 Tests for indicator computation and signal evaluation.
 """
-import pytest
-import pandas as pd
 import numpy as np
-from datetime import datetime, timezone, timedelta
+import pandas as pd
 
-from agents.technical_analyst.indicators import compute_all_indicators, _MIN_CANDLES
 from agents.technical_analyst.agent import _evaluate
-
+from agents.technical_analyst.indicators import _MIN_CANDLES, compute_all_indicators
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -77,7 +74,7 @@ def test_atr_positive():
 
 # ─── _evaluate signal mapping ─────────────────────────────────────────────────
 
-from core.state import Signal
+from core.state import Signal  # noqa: E402
 
 
 def _ind(rsi=50, e9=100, e21=98, e50=95, e200=90, close=100,

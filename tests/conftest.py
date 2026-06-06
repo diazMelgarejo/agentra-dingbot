@@ -3,13 +3,13 @@ tests/conftest.py  —  Shared fixtures for entire test suite.
 All factories produce deterministic data via fixed seeds.
 """
 from __future__ import annotations
-import pytest
-import asyncio
+
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
 import numpy as np
 import pandas as pd
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Any, Dict, Optional
-
+import pytest
 
 # ── OHLCV factories ───────────────────────────────────────────────────────────
 
@@ -36,7 +36,7 @@ def make_ohlcv(n: int = 200, *, trend: str = "flat",
     }, index=dates)
 
 
-def make_multi_tf(seed: int = 42) -> Dict[str, pd.DataFrame]:
+def make_multi_tf(seed: int = 42) -> dict[str, pd.DataFrame]:
     return {
         "5m": make_ohlcv(200, freq="5min", seed=seed),
         "1h": make_ohlcv(200, freq="1h",   seed=seed+1),
@@ -45,7 +45,7 @@ def make_multi_tf(seed: int = 42) -> Dict[str, pd.DataFrame]:
     }
 
 
-def make_sentiment_raw(fg: int = 45, vix: float = 20.0) -> Dict[str, Any]:
+def make_sentiment_raw(fg: int = 45, vix: float = 20.0) -> dict[str, Any]:
     risk = "NORMAL" if vix < 30 else ("ELEVATED" if vix < 40 else "EXTREME")
     mult = 1.0 if vix < 30 else (0.5 if vix < 40 else 0.0)
     return {
@@ -56,7 +56,7 @@ def make_sentiment_raw(fg: int = 45, vix: float = 20.0) -> Dict[str, Any]:
     }
 
 
-def make_polymarket_snap(n_markets: int = 0) -> Dict[str, Any]:
+def make_polymarket_snap(n_markets: int = 0) -> dict[str, Any]:
     return {
         "markets":          [],
         "enriched_markets": [],
@@ -65,7 +65,7 @@ def make_polymarket_snap(n_markets: int = 0) -> Dict[str, Any]:
     }
 
 
-def make_full_snapshot(**kwargs) -> Dict[str, Any]:
+def make_full_snapshot(**kwargs) -> dict[str, Any]:
     return {
         "ohlcv":      make_multi_tf(),
         "sentiment":  make_sentiment_raw(),

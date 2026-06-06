@@ -10,8 +10,8 @@ Binance perpetuals use symbol format: BTC/USDT:USDT
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -20,7 +20,7 @@ from core.state import OnChainSnapshot, Signal
 logger = structlog.get_logger(__name__)
 
 
-async def run(state: Dict[str, Any]) -> Dict[str, Any]:
+async def run(state: dict[str, Any]) -> dict[str, Any]:
     symbol = state.get("symbol", "BTC/USDT")
     perp_symbol = _to_perp_symbol(symbol)
 
@@ -34,7 +34,7 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
 
     snap = OnChainSnapshot(
         symbol       = symbol,
-        timestamp    = datetime.now(timezone.utc),
+        timestamp    = datetime.now(UTC),
         funding_rate = funding,
         signal       = sig,
         confidence   = conf,
@@ -47,7 +47,7 @@ async def run(state: Dict[str, Any]) -> Dict[str, Any]:
 
 # ─── Data fetchers ─────────────────────────────────────────────────────────────
 
-async def _fetch_funding_rate(perp_symbol: str) -> Optional[float]:
+async def _fetch_funding_rate(perp_symbol: str) -> float | None:
     """
     Fetch perpetual funding rate from Binance futures.
     Returns None on failure (agent will signal NEUTRAL).
@@ -68,7 +68,7 @@ async def _fetch_funding_rate(perp_symbol: str) -> Optional[float]:
 
 # ─── Signal scoring ────────────────────────────────────────────────────────────
 
-def _evaluate(funding: Optional[float]) -> Tuple[Signal, float, str]:
+def _evaluate(funding: float | None) -> tuple[Signal, float, str]:
     """
     Funding rate interpretation:
       High positive  → longs are overcrowded → contrarian sell
@@ -81,24 +81,39 @@ def _evaluate(funding: Optional[float]) -> Tuple[Signal, float, str]:
     reasons = []
     score   = 0.0
 
-    if   funding >  0.020: score -= 2.0; reasons.append(f"Extreme long funding ({funding:.4%}) — contrarian sell")
-    elif funding >  0.010: score -= 1.5; reasons.append(f"High long funding ({funding:.4%})")
-    elif funding >  0.005: score -= 0.5; reasons.append(f"Elevated funding ({funding:.4%})")
-    elif funding < -0.010: score += 2.0; reasons.append(f"Extreme short funding ({funding:.4%}) — contrarian buy")
-    elif funding < -0.005: score += 1.5; reasons.append(f"Negative funding ({funding:.4%})")
-    elif funding <  0.000: score += 0.5; reasons.append(f"Slightly negative funding ({funding:.4%})")
+    if funding > 0.020:
+        score -= 2.0
+        reasons.append(f"Extreme long funding ({funding:.4%}) — contrarian sell")
+    elif funding > 0.010:
+        score -= 1.5
+        reasons.append(f"High long funding ({funding:.4%})")
+    elif funding > 0.005:
+        score -= 0.5
+        reasons.append(f"Elevated funding ({funding:.4%})")
+    elif funding < -0.010:
+        score += 2.0
+        reasons.append(f"Extreme short funding ({funding:.4%}) — contrarian buy")
+    elif funding < -0.005:
+        score += 1.5
+        reasons.append(f"Negative funding ({funding:.4%})")
+    elif funding < 0.000:
+        score += 0.5
+        reasons.append(f"Slightly negative funding ({funding:.4%})")
     else:
         reasons.append(f"Neutral funding ({funding:.4%})")
 
-    if   score >=  1.5: sig = Signal.BUY
-    elif score >=  0.5: sig = Signal.BUY    # weak buy
-    elif score <= -1.5: sig = Signal.SELL
-    elif score <= -0.5: sig = Signal.SELL   # weak sell
-    else:               sig = Signal.NEUTRAL
+    if score >= 1.5 or score >= 0.5:
+        sig = Signal.BUY
+    elif score <= -1.5 or score <= -0.5:
+        sig = Signal.SELL
+    else:
+        sig = Signal.NEUTRAL
 
     # Refine to STRONG_* for extreme values
-    if   score >=  2.0: sig = Signal.STRONG_BUY
-    elif score <= -2.0: sig = Signal.STRONG_SELL
+    if score >= 2.0:
+        sig = Signal.STRONG_BUY
+    elif score <= -2.0:
+        sig = Signal.STRONG_SELL
 
     confidence = min(abs(score) / 2.0, 1.0)
     return sig, confidence, " | ".join(reasons)

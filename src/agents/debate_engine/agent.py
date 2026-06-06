@@ -12,7 +12,7 @@ Supported LLM providers: ollama (local), openai (cloud).
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import structlog
 
@@ -44,7 +44,7 @@ _JUDGE_SYSTEM = (
 )
 
 
-async def run(state: Dict[str, Any]) -> Dict[str, Any]:
+async def run(state: dict[str, Any]) -> dict[str, Any]:
     from core.config import get_settings
     symbol   = state.get("symbol", "BTC/USDT")
     provider = get_settings().llm.provider
@@ -105,12 +105,13 @@ _SOURCE_WEIGHTS = {
 }
 
 
-def _heuristic_judge(state: Dict[str, Any]) -> Tuple[Signal, float, str]:
+def _heuristic_judge(state: dict[str, Any]) -> tuple[Signal, float, str]:
     """
     Deterministic consensus from the analyst snapshots — no LLM, no API key.
 
     Each analyst contributes (signal_score × its_confidence × source_weight).
-    The weighted average maps back to a Signal; |avg| scales confidence.
+    The weighted average maps back to a Signal
+    |avg| scales confidence.
     This is the default judge and also the universal fallback when an LLM
     provider is configured but unreachable.
     """
@@ -138,11 +139,16 @@ def _heuristic_judge(state: Dict[str, Any]) -> Tuple[Signal, float, str]:
 
     avg = weighted_sum / weight_total   # ∈ [-2, +2]
 
-    if   avg >=  1.3: consensus = Signal.STRONG_BUY
-    elif avg >=  0.4: consensus = Signal.BUY
-    elif avg <= -1.3: consensus = Signal.STRONG_SELL
-    elif avg <= -0.4: consensus = Signal.SELL
-    else:             consensus = Signal.NEUTRAL
+    if   avg >=  1.3:
+        consensus = Signal.STRONG_BUY
+    elif avg >=  0.4:
+        consensus = Signal.BUY
+    elif avg <= -1.3:
+        consensus = Signal.STRONG_SELL
+    elif avg <= -0.4:
+        consensus = Signal.SELL
+    else:
+        consensus = Signal.NEUTRAL
 
     confidence = min(abs(avg) / 2.0, 1.0)
     reason = f"weighted vote ({', '.join(contributions) or 'all neutral'}) avg={avg:+.2f}"
@@ -151,7 +157,7 @@ def _heuristic_judge(state: Dict[str, Any]) -> Tuple[Signal, float, str]:
 
 # ─── Evidence compilation ─────────────────────────────────────────────────────
 
-def _compile_evidence(state: Dict[str, Any]) -> str:
+def _compile_evidence(state: dict[str, Any]) -> str:
     """Format agent snapshots into a compact evidence block for the LLM."""
     parts = []
     for key, label in [("technical", "TECHNICAL"), ("sentiment", "SENTIMENT"), ("onchain", "ON-CHAIN")]:
@@ -182,7 +188,7 @@ async def _call_agent(role: str, symbol: str, evidence: str) -> str:
     return await _llm(system, evidence, s)
 
 
-async def _judge(symbol: str, bull: str, bear: str) -> Tuple[Signal, float, str]:
+async def _judge(symbol: str, bull: str, bear: str) -> tuple[Signal, float, str]:
     from core.config import get_settings
     s      = get_settings()
     system = _JUDGE_SYSTEM.format(symbol=symbol)

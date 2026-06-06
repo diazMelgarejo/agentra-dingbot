@@ -10,11 +10,10 @@ Key endpoints:
   CLOB WS:   wss://ws-subscriptions-clob.polymarket.com/ws/market
 """
 from __future__ import annotations
+
 import asyncio
-import json
-import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import aiohttp
 import structlog
@@ -43,9 +42,9 @@ async def _http_session():
 
 async def fetch_btc_eth_markets(
     session: aiohttp.ClientSession,
-    tags: List[str] = None,
+    tags: list[str] = None,
     limit: int = 100,
-) -> List[PolymarketMarket]:
+) -> list[PolymarketMarket]:
     """
     Discover active BTC + ETH Up/Down prediction markets from Gamma API.
     Filters for 5-min style markets (question contains 'up or down' or '5-min').
@@ -54,7 +53,7 @@ async def fetch_btc_eth_markets(
         tags = ["crypto"]
 
     params = {"active": "true", "closed": "false", "limit": limit}
-    markets: List[PolymarketMarket] = []
+    markets: list[PolymarketMarket] = []
 
     for tag in tags:
         try:
@@ -97,7 +96,7 @@ async def fetch_btc_eth_markets(
 
 # ── Price Fetching ─────────────────────────────────────────────────────────────
 
-async def fetch_yes_price(session: aiohttp.ClientSession, token_id: str) -> Optional[float]:
+async def fetch_yes_price(session: aiohttp.ClientSession, token_id: str) -> float | None:
     """Fetch current YES token buy price from CLOB API (0–1 scale)."""
     try:
         async with session.get(
@@ -114,7 +113,7 @@ async def fetch_yes_price(session: aiohttp.ClientSession, token_id: str) -> Opti
         return None
 
 
-async def fetch_orderbook_snapshot(session: aiohttp.ClientSession, token_id: str) -> Dict[str, Any]:
+async def fetch_orderbook_snapshot(session: aiohttp.ClientSession, token_id: str) -> dict[str, Any]:
     """Fetch REST L2 orderbook snapshot for a token."""
     try:
         async with session.get(
@@ -131,15 +130,15 @@ async def fetch_orderbook_snapshot(session: aiohttp.ClientSession, token_id: str
 
 async def enrich_markets_with_prices(
     session: aiohttp.ClientSession,
-    markets: List[PolymarketMarket],
+    markets: list[PolymarketMarket],
     max_markets: int = 5,
-) -> List[PolymarketMarket]:
+) -> list[PolymarketMarket]:
     """
     Fetch YES price for the top `max_markets` markets.
     Filters out near-resolved markets (price <0.02 or >0.98).
     Returns markets with yes_price populated, sorted by volume.
     """
-    enriched: List[PolymarketMarket] = []
+    enriched: list[PolymarketMarket] = []
     markets_sorted = sorted(markets, key=lambda m: m.volume_24h, reverse=True)
 
     for m in markets_sorted[:max_markets * 2]:   # check more, filter narrow
@@ -158,7 +157,7 @@ async def enrich_markets_with_prices(
 
 # ── Spread / Farmability ───────────────────────────────────────────────────────
 
-def compute_spread(orderbook: Dict[str, Any]) -> Optional[float]:
+def compute_spread(orderbook: dict[str, Any]) -> float | None:
     """Return bid-ask spread from snapshot dict, or None."""
     bids = orderbook.get("bids", [])
     asks = orderbook.get("asks", [])
@@ -174,9 +173,9 @@ def compute_spread(orderbook: Dict[str, Any]) -> Optional[float]:
 
 async def find_farmable_markets(
     session: aiohttp.ClientSession,
-    markets: List[PolymarketMarket],
+    markets: list[PolymarketMarket],
     max_spread: float = 0.06,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Find markets with tight spreads eligible for liquidity rewards.
     Polymarket pays passive makers daily for maintaining spreads < max_spread.
@@ -211,7 +210,7 @@ async def find_farmable_markets(
 
 # ── Full Polymarket Snapshot (one-call convenience) ───────────────────────────
 
-async def fetch_polymarket_snapshot(max_markets: int = 5) -> Dict[str, Any]:
+async def fetch_polymarket_snapshot(max_markets: int = 5) -> dict[str, Any]:
     """
     Fetch complete Polymarket data snapshot in one call.
     Returns: {markets, enriched_markets, farmable_markets}

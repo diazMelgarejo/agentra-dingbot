@@ -19,23 +19,30 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-from typing import Any, Dict, Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
-import numpy as np
-import pandas as pd
 import pytest
 
 from core.state import (
-    IndicatorSnapshot, MarketDirection, OnChainSnapshot, OrderStatus,
-    PolymarketDecision, RiskAssessment, SentimentSnapshot, Signal,
-    Timeframe, TradingState, TradeOrder,
+    IndicatorSnapshot,
+    OnChainSnapshot,
+    OrderStatus,
+    RiskAssessment,
+    SentimentSnapshot,
+    Signal,
+    Timeframe,
+    TradeOrder,
+    TradingState,
 )
 from tests.conftest import (
-    make_multi_tf, make_sentiment_raw, make_polymarket_snap,
-    make_full_snapshot, make_ohlcv,
+    make_full_snapshot,
+    make_multi_tf,
+    make_ohlcv,
+    make_polymarket_snap,
+    make_sentiment_raw,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -53,7 +60,7 @@ def _state(**overrides) -> TradingState:
     return s
 
 
-def _state_dict(**overrides) -> Dict[str, Any]:
+def _state_dict(**overrides) -> dict[str, Any]:
     """Shallow dict of TradingState for agent functions that expect dict."""
     s = _state(**overrides)
     return {f.name: getattr(s, f.name) for f in dataclasses.fields(s)}
@@ -62,10 +69,10 @@ def _state_dict(**overrides) -> Dict[str, Any]:
 def _snap_4h() -> IndicatorSnapshot:
     from agents.technical_analyst.indicators import compute_all_indicators
     ind = compute_all_indicators(make_ohlcv(200, seed=7))
-    from datetime import datetime, timezone
+    from datetime import datetime
     return IndicatorSnapshot(
         symbol="BTC/USDT", timeframe=Timeframe.H4,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         close=ind["close"], rsi_14=ind["rsi_14"],
         atr_14=ind["atr_14"],
         signal=Signal.NEUTRAL, confidence=0.3,
@@ -83,25 +90,25 @@ class TestGraphConstruction:
         assert g is not None
 
     def test_graph_has_all_8_nodes(self):
-        from core.orchestrator import build_trading_graph
         from langgraph.graph.state import CompiledStateGraph
+
+        from core.orchestrator import build_trading_graph
         g = build_trading_graph()
         assert isinstance(g, CompiledStateGraph)
 
     def test_graph_has_correct_node_names(self):
-        from core.orchestrator import build_trading_graph
         from langgraph.graph import StateGraph
-        g_builder = StateGraph(TradingState)
+
+        from core.orchestrator import build_trading_graph
+        StateGraph(TradingState)
         # Rebuild just to inspect node list
         g = build_trading_graph()
         assert g is not None  # compiled graph exists
 
     def test_build_returns_none_without_langgraph(self):
         """If langgraph is not importable, build_trading_graph returns None gracefully."""
-        import sys
-        from core.orchestrator import build_trading_graph
         # Temporarily make langgraph unimportable
-        real_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+        __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
         with patch("core.orchestrator.build_trading_graph") as mock_build:
             mock_build.return_value = None
             result = mock_build()
@@ -123,8 +130,8 @@ class TestGraphConstruction:
         assert _routing_should_execute(s_no_risk)  == "skip"
 
     def test_routing_skips_on_extreme_vix(self):
+
         from core.orchestrator import _routing_should_execute
-        from datetime import datetime, timezone
         snap = SentimentSnapshot(
             symbol="BTC/USDT", vix=45.0, vix_risk_level="EXTREME"
         )
@@ -391,8 +398,8 @@ class TestDebateEngineNode:
         assert result["debate_confidence"] == pytest.approx(0.75)
 
     def test_evidence_compilation_includes_all_sources(self):
+
         from agents.debate_engine.agent import _compile_evidence
-        from datetime import datetime, timezone
         snap_sent = SentimentSnapshot(
             symbol="BTC/USDT", signal=Signal.BUY, confidence=0.6, reasoning="fear=20"
         )
@@ -444,8 +451,8 @@ class TestRiskManagerNode:
 
     @pytest.mark.asyncio
     async def test_extreme_vix_blocks_all_trades(self):
+
         from agents.risk_manager.agent import run
-        from datetime import datetime, timezone
         vix_snap = SentimentSnapshot(
             symbol="BTC/USDT", vix=45.0, vix_risk_level="EXTREME"
         )
@@ -460,8 +467,8 @@ class TestRiskManagerNode:
 
     @pytest.mark.asyncio
     async def test_elevated_vix_halves_position(self):
+
         from agents.risk_manager.agent import run
-        from datetime import datetime, timezone
         normal_snap  = SentimentSnapshot(symbol="BTC/USDT", vix=20.0, vix_risk_level="NORMAL")
         elevated_snap = SentimentSnapshot(symbol="BTC/USDT", vix=33.0, vix_risk_level="ELEVATED")
         base_state = dict(debate_consensus=Signal.BUY, debate_confidence=0.8, technical=_snap_4h())
@@ -472,7 +479,7 @@ class TestRiskManagerNode:
 
     @pytest.mark.asyncio
     async def test_max_loss_cap_enforced(self):
-        from agents.risk_manager.agent import run, _MAX_LOSS_PCT
+        from agents.risk_manager.agent import _MAX_LOSS_PCT, run
         # Force high ATR to trigger cap
         snap = _snap_4h()
         snap.atr_14  = snap.close * 0.15   # 15% ATR — extreme
@@ -700,8 +707,8 @@ class TestPolymarketPipeline:
 
     @pytest.mark.asyncio
     async def test_extreme_vix_blocks_polymarket(self):
+
         from agents.polymarket_agent.agent import run
-        from datetime import datetime, timezone
         vix_snap = SentimentSnapshot(
             symbol="BTC/USDT", vix=45.0, vix_risk_level="EXTREME"
         )
@@ -735,7 +742,7 @@ class TestPolymarketPipeline:
         assert result.get("technical")  is not None  # spot ran
         assert result.get("sentiment")  is not None  # spot ran
         # polymarket_decision can be None (no markets) but key must exist
-        assert "polymarket_decision" in result or True   # always OK
+        assert True   # always OK
 
 
 # ── G. Error Resilience ────────────────────────────────────────────────────────

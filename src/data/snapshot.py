@@ -6,23 +6,25 @@ into a single async call for one decision cycle.
 This is the primary entry point for the LangGraph ingest_data node.
 """
 from __future__ import annotations
+
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import structlog
 
-from data.fetcher      import fetch_ohlcv_multi_timeframe
-from data.fear_greed   import fetch_sentiment_snapshot
-from data.polymarket   import fetch_polymarket_snapshot
+from data.fear_greed import fetch_sentiment_snapshot
+from data.fetcher import fetch_ohlcv_multi_timeframe
+from data.polymarket import fetch_polymarket_snapshot
 
 logger = structlog.get_logger(__name__)
 
 
 async def fetch_full_snapshot(
     symbol: str = "BTC/USDT",
-    timeframes: Optional[List[str]] = None,
+    timeframes: list[str] | None = None,
     include_polymarket: bool = True,
     polymarket_max_markets: int = 5,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Fetch all data needed for one complete SuperBot decision cycle.
 
@@ -35,8 +37,8 @@ async def fetch_full_snapshot(
             "errors":       [str],
         }
     """
-    result: Dict[str, Any] = {"symbol": symbol, "errors": []}
-    tasks: Dict[str, Any] = {
+    result: dict[str, Any] = {"symbol": symbol, "errors": []}
+    tasks: dict[str, Any] = {
         "ohlcv":     fetch_ohlcv_multi_timeframe(symbol, timeframes),
         "sentiment": fetch_sentiment_snapshot(),
     }
@@ -46,7 +48,7 @@ async def fetch_full_snapshot(
     # Run all fetches concurrently
     fetched = await asyncio.gather(*tasks.values(), return_exceptions=True)
 
-    for key, value in zip(tasks.keys(), fetched):
+    for key, value in zip(tasks.keys(), fetched, strict=False):
         if isinstance(value, Exception):
             logger.error("snapshot_fetch_failed", source=key, error=str(value))
             result["errors"].append(f"{key}: {value}")

@@ -8,10 +8,14 @@ Coverage:
                  degenerate→heuristic, feature importance
   D. bridge    — generate_ml_signal contract, adaptive retrain cadence,
                  persistence, threshold→signal mapping, self-healing
-  E. agent     — LangGraph node returns {"ml": MLSnapshot}; short/missing
-                 data → None; exception-guarded
-  F. pipeline  — graph compiles with ml_analyst; full ainvoke completes;
-                 fetch called once; ml failure doesn't block the pipeline
+  E. agent     — LangGraph node returns {"ml": MLSnapshot}
+  short/missing
+                 data → None
+                 exception-guarded
+  F. pipeline  — graph compiles with ml_analyst
+  full ainvoke completes
+                 fetch called once
+                 ml failure doesn't block the pipeline
 
 LightGBM is optional: backend-specific assertions skip when it isn't installed,
 mirroring the TA-Lib equivalence-skip pattern. The sklearn HistGBM path is the
@@ -19,17 +23,15 @@ one exercised live in CI/sandbox.
 """
 from __future__ import annotations
 
+import importlib
 import os
 import tempfile
-import importlib
-from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from core.state import Signal
-
 
 # ── Fixtures / factories ───────────────────────────────────────────────────────
 
@@ -99,7 +101,7 @@ _HAS_LGBM = importlib.util.find_spec("lightgbm") is not None
 class TestFeatures:
 
     def test_columns_exact(self):
-        from ml.features import build_features, FEATURE_COLUMNS
+        from ml.features import FEATURE_COLUMNS, build_features
         feats = build_features(_ohlcv(200))
         assert list(feats.columns) == FEATURE_COLUMNS
 
@@ -116,7 +118,7 @@ class TestFeatures:
         pd.testing.assert_frame_equal(a, b)
 
     def test_empty_input_returns_empty_with_columns(self):
-        from ml.features import build_features, FEATURE_COLUMNS
+        from ml.features import FEATURE_COLUMNS, build_features
         out = build_features(pd.DataFrame())
         assert list(out.columns) == FEATURE_COLUMNS
         assert len(out) == 0
@@ -172,7 +174,7 @@ class TestLabels:
 
     def test_align_xy_drops_nan_rows(self):
         from ml.features import build_features
-        from ml.labels import make_labels, align_xy
+        from ml.labels import align_xy, make_labels
         df = _ohlcv(200)
         X, y = align_xy(build_features(df), make_labels(df, horizon=3))
         assert len(X) == len(y)
@@ -187,7 +189,7 @@ class TestModel:
 
     def _xy(self, df):
         from ml.features import build_features
-        from ml.labels import make_labels, align_xy
+        from ml.labels import align_xy, make_labels
         return align_xy(build_features(df), make_labels(df, horizon=1))
 
     def test_fit_predict_proba_in_range(self):
@@ -237,8 +239,8 @@ class TestModel:
         assert p.min() >= 0.0 and p.max() <= 1.0
 
     def test_empty_fit_forces_heuristic(self):
-        from ml.model import MLSignalModel
         from ml.features import FEATURE_COLUMNS
+        from ml.model import MLSignalModel
         empty = pd.DataFrame(columns=FEATURE_COLUMNS)
         m = MLSignalModel(model_type="auto").fit(empty, pd.Series(dtype=float))
         assert m.backend == "heuristic"
@@ -249,8 +251,10 @@ class TestModel:
         m = MLSignalModel(model_type="heuristic").fit(X, y)
         assert m.backend == "heuristic"
         # positive momentum row → proba ≥ 0.5; negative → ≤ 0.5
-        row_pos = X.iloc[[-1]].copy(); row_pos["roll_mean_5"] = 0.05
-        row_neg = X.iloc[[-1]].copy(); row_neg["roll_mean_5"] = -0.05
+        row_pos = X.iloc[[-1]].copy()
+        row_pos["roll_mean_5"] = 0.05
+        row_neg = X.iloc[[-1]].copy()
+        row_neg["roll_mean_5"] = -0.05
         assert m.predict_proba_up(row_pos)[0] >= 0.5
         assert m.predict_proba_up(row_neg)[0] <= 0.5
 
@@ -437,6 +441,7 @@ class TestPipelineWithML:
     @pytest.mark.asyncio
     async def test_full_pipeline_populates_ml(self, mock_debate_neutral):
         from unittest.mock import AsyncMock, patch
+
         from core.orchestrator import build_trading_graph
         from core.state import TradingState
         from tests.conftest import make_full_snapshot
@@ -452,6 +457,7 @@ class TestPipelineWithML:
     @pytest.mark.asyncio
     async def test_ml_failure_does_not_block_pipeline(self, mock_debate_neutral):
         from unittest.mock import AsyncMock, patch
+
         from core.orchestrator import build_trading_graph
         from core.state import TradingState
         from tests.conftest import make_full_snapshot
@@ -471,6 +477,7 @@ class TestPipelineWithML:
     @pytest.mark.asyncio
     async def test_fetch_called_once_with_ml_node(self, mock_debate_neutral):
         from unittest.mock import AsyncMock, patch
+
         from core.orchestrator import build_trading_graph
         from core.state import TradingState
         from tests.conftest import make_full_snapshot
