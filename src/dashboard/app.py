@@ -32,6 +32,8 @@ TRADINGVIEW_SECRET = os.getenv("TRADINGVIEW_WEBHOOK_SECRET", "")
 # ── In-process shared state ───────────────────────────────────────────────────
 _latest_state: dict[str, Any] = {}
 _external_signals: list[dict[str, Any]] = []
+# WebSocket push cadence (seconds); overridable for tests / tuning
+POLL_SECONDS: int = int(os.getenv("DASHBOARD_PUSH_SECONDS", "60"))
 _MAX_STORED_SIGNALS = 50
 
 
@@ -125,15 +127,16 @@ def create_app() -> FastAPI:
 
     @app.websocket("/ws/signals")
     async def ws_signals(websocket: WebSocket):
+        from dashboard.state_view import to_dashboard_view
         await websocket.accept()
         try:
             while True:
                 await websocket.send_json({
                     "type": "cycle_update" if _latest_state else "heartbeat",
                     "timestamp": datetime.now(UTC).isoformat(),
-                    "data": _serialize_state(_latest_state),
+                    "data": to_dashboard_view(_latest_state) if _latest_state else {},
                 })
-                await asyncio.sleep(60)
+                await asyncio.sleep(POLL_SECONDS)
         except WebSocketDisconnect:
             pass
 
