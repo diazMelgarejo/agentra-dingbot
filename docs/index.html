@@ -144,6 +144,8 @@ h1,h2,h3,.display { font-family: 'Sora', system-ui, sans-serif; letter-spacing: 
 .conn.live .dot { background: var(--bull); box-shadow: 0 0 0 0 var(--bull); animation: pulse 2s infinite; }
 .conn.demo { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
 .conn.demo .dot { background: var(--warn); }
+.conn.snapshot { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, transparent); }
+.conn.snapshot .dot { background: var(--primary); }
 @keyframes pulse { 0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--bull) 60%,transparent);} 70%{box-shadow:0 0 0 6px transparent;} 100%{box-shadow:0 0 0 0 transparent;} }
 .icon-btn {
   width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border);
@@ -317,6 +319,12 @@ tbody tr:hover { background: var(--surface-2); }
       <div class="banner" id="demo-banner">
         <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <span><strong>Demo mode</strong> — showing simulated data. To see live signals, run the backend locally: <code>LLM_PROVIDER=none python src/dashboard/app.py</code> then refresh. This page auto-connects to <code>ws://localhost:8000/ws/signals</code>.</span>
+      </div>
+
+      <!-- snapshot banner -->
+      <div class="banner" id="snapshot-banner" style="display:none;background:var(--primary-soft);color:var(--primary);border-color:color-mix(in srgb,var(--primary) 30%,transparent)">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 11-6.2-8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 4v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span><strong>Snapshot data</strong> — last exported <span id="snapshot-when" class="mono">—</span>. This is a real cycle committed by an admin (refreshed per session/day). Run the backend for live streaming.</span>
       </div>
 
       <!-- KPI ROW -->
@@ -632,12 +640,16 @@ function render(d){
 /* ════════════════════════════════════════════════════════════════════
    LIVE vs DEMO — try real backend WebSocket, else simulate
    ════════════════════════════════════════════════════════════════════ */
-function setConn(live){
+function setConn(mode){
+  // mode: 'live' | 'snapshot' | 'demo'
   const el=document.getElementById('conn');
-  el.className='conn '+(live?'live':'demo');
-  document.getElementById('conn-text').textContent=live?'Live':'Demo Data';
-  document.getElementById('demo-banner').style.display=live?'none':'flex';
-  document.getElementById('freqlink').href=live?'http://localhost:8080/ui/':'#';
+  const txt={live:'Live',snapshot:'Snapshot',demo:'Demo Data'}[mode];
+  el.className='conn '+(mode==='live'?'live':mode==='snapshot'?'snapshot':'demo');
+  document.getElementById('conn-text').textContent=txt;
+  document.getElementById('demo-banner').style.display=(mode==='demo')?'flex':'none';
+  const snapBanner=document.getElementById('snapshot-banner');
+  if(snapBanner) snapBanner.style.display=(mode==='snapshot')?'flex':'none';
+  document.getElementById('freqlink').href=(mode==='live')?'http://localhost:8080/ui/':'#';
 }
 
 function demoState(){
@@ -655,7 +667,7 @@ function demoState(){
 
 let demoTimer=null, lastCandle=null;
 function startDemo(){
-  setConn(false);
+  setConn('demo');
   render(demoState());
   // gentle live-feel: update metrics + advance the last candle in real time
   demoTimer=setInterval(()=>{
@@ -671,16 +683,51 @@ function startDemo(){
   }, 3500);
 }
 
+/* ── Tier 2: poll the committed snapshot.json (GitHub Pages / no backend) ──
+   Uses cache-busting (?t= + no-store) and res.ok check per fetch() semantics. */
+const SNAPSHOT_URL='data/snapshot.json';
+const SNAPSHOT_POLL_MS=60000;
+let snapshotTimer=null, snapshotMeta=null;
+async function pollSnapshot(){
+  try{
+    const res=await fetch(`${SNAPSHOT_URL}?t=${Date.now()}`,{cache:'no-store'});
+    if(!res.ok) return false;                 // 404 → no snapshot committed yet
+    const payload=await res.json();
+    const data=payload.data||payload;          // tolerate enveloped or bare
+    if(!data || !Object.keys(data).length) return false;
+    snapshotMeta=payload.meta||null;
+    if(demoTimer){clearInterval(demoTimer);demoTimer=null;}
+    setConn('snapshot');
+    render(data);
+    if(snapshotMeta && snapshotMeta.generated_at){
+      const when=new Date(snapshotMeta.generated_at).toLocaleString();
+      const note=document.getElementById('snapshot-when');
+      if(note) note.textContent=when;
+    }
+    return true;
+  }catch(e){ return false; }
+}
+
 function tryLive(){
   let settled=false;
   try{
     const ws=new WebSocket('ws://localhost:8000/ws/signals');
-    const to=setTimeout(()=>{ if(!settled){ settled=true; try{ws.close();}catch(e){} startDemo(); } }, 2500);
-    ws.onopen=()=>{ if(settled)return; settled=true; clearTimeout(to); if(demoTimer)clearInterval(demoTimer); setConn(true); };
+    const to=setTimeout(()=>{ if(!settled){ settled=true; try{ws.close();}catch(e){} fallbackFromLive(); } }, 2500);
+    ws.onopen=()=>{ if(settled)return; settled=true; clearTimeout(to); if(demoTimer){clearInterval(demoTimer);demoTimer=null;} if(snapshotTimer){clearInterval(snapshotTimer);snapshotTimer=null;} setConn('live'); };
     ws.onmessage=ev=>{ try{ const msg=JSON.parse(ev.data); if(msg.data && Object.keys(msg.data).length) render(msg.data); }catch(e){} };
-    ws.onerror=()=>{ if(!settled){ settled=true; clearTimeout(to); startDemo(); } };
-    ws.onclose=()=>{ setConn(false); if(!demoTimer) startDemo(); };
-  }catch(e){ startDemo(); }
+    ws.onerror=()=>{ if(!settled){ settled=true; clearTimeout(to); fallbackFromLive(); } };
+    ws.onclose=()=>{ if(settled && !demoTimer && !snapshotTimer) fallbackFromLive(); };
+  }catch(e){ fallbackFromLive(); }
+}
+
+/* When no live backend: try snapshot first, fall back to demo. Keep polling
+   snapshot so an admin re-running the exporter upgrades the page automatically. */
+async function fallbackFromLive(){
+  const ok=await pollSnapshot();
+  if(!ok) startDemo();
+  if(!snapshotTimer){
+    snapshotTimer=setInterval(pollSnapshot, SNAPSHOT_POLL_MS);
+  }
 }
 
 /* boot */

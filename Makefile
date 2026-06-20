@@ -33,6 +33,18 @@ paper:
 dashboard:
 	PYTHONPATH=src LLM_PROVIDER=none python src/dashboard/app.py
 
+# ── Step 8: Snapshot export for GitHub Pages ──────────────────────────────────
+snapshot:
+	PYTHONPATH=src LLM_PROVIDER=none python -m dashboard.snapshot_export --mode demo
+
+snapshot-live:
+	PYTHONPATH=src LLM_PROVIDER=none FREQTRADE_MODE=off \
+	  python -m dashboard.snapshot_export --mode cycle --symbol BTC/USDT
+
+# ── Portfolio config (validate the multi-sleeve YAML) ─────────────────────────
+portfolio:
+	PYTHONPATH=src python -m strategies.portfolio_config
+
 # ── Step 6: Backtest + Monte Carlo ────────────────────────────────────────────
 backtest:
 	PYTHONPATH=src python src/backtesting/backtest.py --days 30 --sims 1000
