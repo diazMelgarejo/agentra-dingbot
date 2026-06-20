@@ -1,0 +1,27 @@
+{
+  "description": "Agentra DingBot — Claude Code session settings",
+  "allowedTools": ["bash", "file-read", "file-write", "web-search"],
+  "env": {
+    "PYTHONPATH": "src",
+    "LLM_PROVIDER": "none",
+    "FREQTRADE_MODE": "off",
+    "LIVE_TRADING": "false"
+  },
+  "permissions": {
+    "bash": {
+      "allow": [
+        "python -m pytest*",
+        "python -m dashboard.*",
+        "python scripts/*",
+        "git *",
+        "make *",
+        "pip install*",
+        "PYTHONPATH=src python*"
+      ],
+      "deny": [
+        "rm -rf /*",
+        "sudo rm*"
+      ]
+    }
+  }
+}
