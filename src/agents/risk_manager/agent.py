@@ -78,6 +78,24 @@ async def run(state: dict[str, Any]) -> dict[str, Any]:
         logger.info("position_capped", new_pos_pct=round(pos_pct, 2))
 
     max_allowed = settings.trading.max_position_size_pct
+
+    # ── Portfolio config: tactical swing min reward-to-risk gate ────────────
+    # config/portfolio.yaml.tactical_swing requires >= min_reward_to_risk (3.0).
+    # For standard spot signals the tp_rr is already set by _RISK_RULES.
+    # This gate applies when the portfolio config is stricter than the signal rule,
+    # guarding against any future signal that might produce a low R:R.
+    try:
+        from strategies.portfolio_config import load_portfolio
+        _min_rr = load_portfolio().risk.min_reward_to_risk
+    except Exception:
+        _min_rr = 2.0   # safe fallback if portfolio.yaml not present
+    computed_rr = rules["tp_rr"]
+    # Only fire when tp_rr is below the signal-level default AND below the portfolio min
+    signal_default_rr = _RISK_RULES.get(consensus, {}).get("tp_rr", computed_rr)
+    if computed_rr < _min_rr and computed_rr < signal_default_rr:
+        return _reject(
+            f"R:R {computed_rr:.1f} below portfolio minimum {_min_rr:.1f} "
+            f"for {consensus.value!r} signal")
     if pos_pct > max_allowed:
         pos_pct = max_allowed
 
