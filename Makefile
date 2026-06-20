@@ -33,6 +33,10 @@ paper:
 dashboard:
 	PYTHONPATH=src LLM_PROVIDER=none python src/dashboard/app.py
 
+# ── Step 8: Browser smoke tests (Playwright) ──────────────────────────────────
+smoke-test:
+	python -m pytest tests/test_dashboard_smoke.py -v
+
 # ── Step 8: Snapshot export for GitHub Pages ──────────────────────────────────
 snapshot:
 	PYTHONPATH=src LLM_PROVIDER=none python -m dashboard.snapshot_export --mode demo

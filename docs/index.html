@@ -269,6 +269,14 @@ tbody tr:hover { background: var(--surface-2); }
 .fade-in { animation: fadeIn .5s ease both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 </style>
+
+<!-- ════ OPTIONAL PRIVACY-FRIENDLY ANALYTICS ══════════════════════════════
+  Zero tracking by default. To enable, uncomment and replace YOUR_DOMAIN.
+  Plausible.io is GDPR-compliant, no cookies, no personal data collected.
+  ════════════════════════════════════════════════════════════════════════ -->
+<!--
+<script defer data-domain="YOUR_DOMAIN.github.io" src="https://plausible.io/js/script.js"></script>
+-->
 </head>
 <body>
 <div class="app">
@@ -293,7 +301,7 @@ tbody tr:hover { background: var(--surface-2); }
     <button class="nav-item"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> Risk Manager</button>
     <div class="sidebar-foot">
       <a href="https://github.com/diazMelgarejo/agentra-dingbot" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 016 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0024 12c0-6.63-5.37-12-12-12z"/></svg> View on GitHub</a>
-      <a href="#" id="freqlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M8 12l3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> FreqUI (when live)</a>
+      <a href="#" id="freqlink" target="_blank" rel="noopener" title="Opens FreqUI in a new tab when the FreqTrade sidecar is running"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M8 12l3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> FreqUI <span id="frequi-status" style="font-size:10px;opacity:.7">(offline)</span></a>
     </div>
   </aside>
 
@@ -634,7 +642,42 @@ function render(d){
   if(d.ohlcv_4h && d.ohlcv_4h.length && candleSeries){
     candleSeries.setData(d.ohlcv_4h);
     const last=d.ohlcv_4h[d.ohlcv_4h.length-1];
-    document.getElementById('hdr-price').textContent='$'+last.close.toLocaleString();
+    document.getElementById('hdr-price').textContent='$'+last.close.toLocaleString(undefined,{maximumFractionDigits:1});
+  }
+
+  // ── Polymarket markets panel (live from state.polymarket_markets) ─────────
+  if(d.polymarket && d.polymarket.length){
+    const pmBody=document.getElementById('pm-body');
+    pmBody.innerHTML=d.polymarket.map(m=>{
+      const p=m.yes_price||0.5;
+      const pct=Math.round(p*100);
+      const cls=p>0.60?'text-bull':p<0.40?'text-bear':'';
+      const ourB=m.our_prob!=null
+        ?`<span class="mono" style="font-size:10.5px;color:var(--text-muted);margin-right:4px">ours:${m.our_prob.toFixed(2)}</span>`:'';
+      const vol=m.volume_24h
+        ?`<span style="font-size:10px;color:var(--text-muted)">&nbsp;$${(m.volume_24h/1000).toFixed(0)}k</span>`:'';
+      return `<div class="pm-row">
+        <span class="pm-q">${m.question||'—'}${vol}</span>
+        <div class="pm-bar"><div class="pm-bar-fill" style="width:${pct}%"></div></div>
+        ${ourB}<span class="pm-prob ${cls}">${p.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Risk assessment table (live from state.risk) ──────────────────────────
+  if(d.risk){
+    const r=d.risk;
+    const $ = id => document.getElementById(id);
+    if($('risk-pos') && r.position_size_pct!=null) $('risk-pos').textContent=r.position_size_pct.toFixed(1)+'%';
+    if($('risk-sl')  && r.stop_loss_pct!=null)     $('risk-sl').textContent=r.stop_loss_pct.toFixed(1)+'%';
+    if($('risk-tp')  && r.take_profit_pct!=null)   $('risk-tp').textContent=r.take_profit_pct.toFixed(1)+'%';
+    if($('risk-rr')  && r.risk_reward_ratio!=null) $('risk-rr').textContent='1 : '+r.risk_reward_ratio.toFixed(1);
+    if($('risk-vix')){
+      const vl=r.vix_risk_level||'NORMAL';
+      const vc=vl==='NORMAL'?'buy':vl==='ELEVATED'?'warn':'sell';
+      $('risk-vix').className='pill '+vc;
+      $('risk-vix').innerHTML='<span class="dot"></span>'+(vl==='NORMAL'?'CLEAR':vl);
+    }
   }
 }
 
@@ -651,6 +694,8 @@ function setConn(mode){
   const snapBanner=document.getElementById('snapshot-banner');
   if(snapBanner) snapBanner.style.display=(mode==='snapshot')?'flex':'none';
   document.getElementById('freqlink').href=(mode==='live')?'http://localhost:8080/ui/':'#';
+  const fstat=document.getElementById('frequi-status');
+  if(fstat) fstat.textContent=mode==='live'?'(open →)':'(offline)';
 }
 
 function demoState(){
@@ -686,7 +731,7 @@ function startDemo(){
 
 /* ── Tier 2: poll the committed snapshot.json (GitHub Pages / no backend) ──
    Uses cache-busting (?t= + no-store) and res.ok check per fetch() semantics. */
-const SNAPSHOT_URL='data/snapshot.json';
+const SNAPSHOT_URL='data/latest.json';   // real data updated per publish
 const SNAPSHOT_POLL_MS=60000;
 let snapshotTimer=null, snapshotMeta=null;
 async function pollSnapshot(){

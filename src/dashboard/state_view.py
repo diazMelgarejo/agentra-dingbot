@@ -101,25 +101,54 @@ def to_dashboard_view(state: Any) -> dict[str, Any]:
 
     # ── Risk assessment ──────────────────────────────────────────────────────
     if risk is not None:
+        # vix_risk_level lives on SentimentSnapshot, not RiskAssessment
+        vix_level = "NORMAL"
+        if sentiment is not None:
+            vix_level = _get(sentiment, "vix_risk_level", "NORMAL")
         view["risk"] = {
             "approved":          bool(_get(risk, "approved", False)),
             "position_size_pct": _round(_get(risk, "position_size_pct"), 2),
             "stop_loss_pct":     _round(_get(risk, "stop_loss_pct"), 2),
             "take_profit_pct":   _round(_get(risk, "take_profit_pct"), 2),
-            "vix_risk_level":    _get(risk, "vix_risk_level", "NORMAL"),
+            "risk_reward_ratio": _round(_get(risk, "risk_reward_ratio"), 2),
+            "max_loss_pct":      _round(_get(risk, "max_loss_pct"), 2),
+            "vix_risk_level":    vix_level,
+            "reasoning":         str(_get(risk, "reasoning", "") or "")[:120],
         }
 
     # ── Polymarket markets ───────────────────────────────────────────────────
-    markets = _get(state, "polymarket_markets", []) or []
+    markets  = _get(state, "polymarket_markets", []) or []
+    decision = _get(state, "polymarket_decision")
+    decision_mid = _get(decision, "market_id", "") if decision else ""
+
     pm: list[dict[str, Any]] = []
     for m in markets[:6]:
+        mid = _get(m, "market_id", "")
+        # our_prob comes from PolymarketDecision.posterior_prob, not from the market
+        our_prob = None
+        if decision and mid and mid == decision_mid:
+            our_prob = _round(_get(decision, "posterior_prob"), 3)
         pm.append({
-            "question":  _get(m, "question", _get(m, "title", "—")),
-            "yes_price": _round(_get(m, "yes_price", _get(m, "price")), 3),
-            "our_prob":  _round(_get(m, "our_prob", _get(m, "model_prob")), 3),
+            "question":   (_get(m, "question", "—") or "—")[:80],
+            "yes_price":  _round(_get(m, "yes_price"), 3),
+            "our_prob":   our_prob,
+            "volume_24h": _round(_get(m, "volume_24h"), 0),
+            "is_active":  bool(_get(m, "is_active", True)),
         })
     if pm:
         view["polymarket"] = pm
+
+    # Polymarket decision summary (shown in sidebar badge when trade authorised)
+    if decision is not None and _get(decision, "should_trade", False):
+        view["polymarket_decision"] = {
+            "should_trade":   True,
+            "direction":      _enum(_get(decision, "direction", "NEUTRAL")),
+            "question":       str(_get(decision, "question", ""))[:80],
+            "yes_price":      _round(_get(decision, "yes_price"), 3),
+            "posterior_prob": _round(_get(decision, "posterior_prob"), 3),
+            "edge_pct":       _round(_get(decision, "edge_pct"), 2),
+            "position_usdc":  _round(_get(decision, "position_usdc"), 2),
+        }
 
     # ── OHLCV for the candlestick chart ──────────────────────────────────────
     ohlcv = _get(state, "ohlcv", {}) or {}

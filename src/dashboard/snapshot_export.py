@@ -42,7 +42,8 @@ sys.path.insert(0, str(_ROOT / "src"))
 logger = structlog.get_logger("snapshot")
 
 # Default output path — served by GitHub Pages from /docs
-DEFAULT_OUT = _ROOT / "docs" / "data" / "snapshot.json"
+DEFAULT_OUT    = _ROOT / "docs" / "data" / "snapshot.json"
+LATEST_OUT     = _ROOT / "docs" / "data" / "latest.json"     # polled by Pages dashboard
 
 
 # ── Demo snapshot (no network) ────────────────────────────────────────────────
@@ -152,6 +153,9 @@ async def _main_async(mode: str, symbol: str, out: Path) -> int:
 
     payload = _wrap(view, mode, symbol)
     write_snapshot(payload, out)
+    # Always keep latest.json in sync (dashboard polls this path)
+    if out != LATEST_OUT:
+        write_snapshot(payload, LATEST_OUT)
     print(f"✅ snapshot written: {out}  (mode={mode}, "
           f"consensus={view.get('debate_consensus')})")
     return 0
