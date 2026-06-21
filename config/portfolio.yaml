@@ -1,0 +1,74 @@
+# Multi-sleeve portfolio configuration (factor/regime allocation).
+# Derived from the 2026 sample trade-plan spec. This is a REGIME-EXPOSURE
+# framework, not a copy-trading or single-name prediction system.
+#
+# Loaded and validated by src/strategies/portfolio_config.py (pydantic-settings).
+# Layer weights must sum to 1.0; per-sleeve weight must respect risk caps.
+
+meta:
+  title: "Agentra DingBot — Regime Allocation v1"
+  version: "1.0.0"
+  strategy_type: factor_allocation_plus_tactical_swing
+  risk_profile: disciplined_moderate
+  note: >-
+    Extract factor exposures and regime posture; do not mirror disclosed trades
+    or chase delayed filings. The edge is regime alignment, not ticker imitation.
+
+# ── Sleeves (must sum to 1.0) ─────────────────────────────────────────────────
+layers:
+  core_beta:
+    weight: 0.60
+    role: institutional_beta_sleeve
+    mix:                          # sub-weights within the sleeve (sum to its weight)
+      sp_500: 0.25
+      nasdaq_ai: 0.20
+      bitcoin: 0.10
+      cash_or_t_bills: 0.05
+    rationale:
+      - capture_secular_winners
+      - maintain_broad_beta
+      - avoid_overtrading
+
+  ai_infrastructure:
+    weight: 0.25
+    role: long_duration_compute_and_cloud
+    basket: [NVDA, MSFT, AVGO, AMZN, ORCL]
+    rationale:
+      - favor_compute_over_speculative_ai_apps
+      - scale_in_on_weakness_not_breakouts
+
+  bitcoin_sleeve:
+    weight: 0.10
+    role: monetary_hedge_plus_liquidity_growth
+    basket: [bitcoin_spot, bitcoin_infrastructure]
+    notes:
+      - spot_btc_is_cleaner_than_wrappers
+      - size_in_tranches_not_all_at_once
+
+  tactical_swing:
+    weight: 0.05
+    role: tactical_mandell_system
+    deployment_conditions:
+      - weekly_trend_aligns
+      - liquidity_sweep_completes
+      - etf_flows_supportive
+      - open_interest_resets_after_leverage_flush
+
+# ── Risk caps (hard constraints) ──────────────────────────────────────────────
+risk:
+  max_position_concentration_pct: 25.0   # no single name > 25%
+  max_trade_risk_pct: 2.0                # max account risk per trade
+  max_portfolio_heat_pct: 6.0            # max aggregate open risk
+  max_correlated_positions: 3
+  min_reward_to_risk: 3.0                # tactical sleeve requires >= 3:1
+  no_blind_replication: true
+  delayed_filings_not_for_copy_trading: true
+
+# ── Event calendar (risk-on only AFTER uncertainty resolves) ──────────────────
+catalysts:
+  - name: "Nasdaq-100 quarterly rebalance"
+    date: "2026-06-22"
+    action: expect_rebalance_flows_in_large_cap_tech
+  - name: "June CPI"
+    date: "2026-07-14"
+    action: add_risk_only_after_print_confirms

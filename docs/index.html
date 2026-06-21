@@ -6,6 +6,7 @@
 <title>Agentra DingBot — Trading Dashboard</title>
 <meta name="description" content="Multi-agent BTC/ETH + Polymarket hybrid trading platform. Live signal consensus, agent analysis, and risk monitoring.">
 
+<!-- Live at: https://diazmelgarejo.github.io/agentra-dingbot/ -->
 <!-- Lightweight Charts (Apache-2.0) — TradingView's open-source library, fed by our own CCXT data -->
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 
@@ -144,6 +145,8 @@ h1,h2,h3,.display { font-family: 'Sora', system-ui, sans-serif; letter-spacing: 
 .conn.live .dot { background: var(--bull); box-shadow: 0 0 0 0 var(--bull); animation: pulse 2s infinite; }
 .conn.demo { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
 .conn.demo .dot { background: var(--warn); }
+.conn.snapshot { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, transparent); }
+.conn.snapshot .dot { background: var(--primary); }
 @keyframes pulse { 0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--bull) 60%,transparent);} 70%{box-shadow:0 0 0 6px transparent;} 100%{box-shadow:0 0 0 0 transparent;} }
 .icon-btn {
   width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border);
@@ -266,6 +269,14 @@ tbody tr:hover { background: var(--surface-2); }
 .fade-in { animation: fadeIn .5s ease both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 </style>
+
+<!-- ════ OPTIONAL PRIVACY-FRIENDLY ANALYTICS ══════════════════════════════
+  Zero tracking by default. To enable, uncomment and replace YOUR_DOMAIN.
+  Plausible.io is GDPR-compliant, no cookies, no personal data collected.
+  ════════════════════════════════════════════════════════════════════════ -->
+<!--
+<script defer data-domain="YOUR_DOMAIN.github.io" src="https://plausible.io/js/script.js"></script>
+-->
 </head>
 <body>
 <div class="app">
@@ -290,7 +301,7 @@ tbody tr:hover { background: var(--surface-2); }
     <button class="nav-item"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg> Risk Manager</button>
     <div class="sidebar-foot">
       <a href="https://github.com/diazMelgarejo/agentra-dingbot" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.39.6.11.82-.26.82-.58v-2c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 016 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0024 12c0-6.63-5.37-12-12-12z"/></svg> View on GitHub</a>
-      <a href="#" id="freqlink"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M8 12l3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> FreqUI (when live)</a>
+      <a href="#" id="freqlink" target="_blank" rel="noopener" title="Opens FreqUI in a new tab when the FreqTrade sidecar is running"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M8 12l3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> FreqUI <span id="frequi-status" style="font-size:10px;opacity:.7">(offline)</span></a>
     </div>
   </aside>
 
@@ -317,6 +328,12 @@ tbody tr:hover { background: var(--surface-2); }
       <div class="banner" id="demo-banner">
         <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 8v5M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <span><strong>Demo mode</strong> — showing simulated data. To see live signals, run the backend locally: <code>LLM_PROVIDER=none python src/dashboard/app.py</code> then refresh. This page auto-connects to <code>ws://localhost:8000/ws/signals</code>.</span>
+      </div>
+
+      <!-- snapshot banner -->
+      <div class="banner" id="snapshot-banner" style="display:none;background:var(--primary-soft);color:var(--primary);border-color:color-mix(in srgb,var(--primary) 30%,transparent)">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 11-6.2-8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M21 4v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span><strong>Snapshot data</strong> — last exported <span id="snapshot-when" class="mono">—</span>. This is a real cycle committed by an admin (refreshed per session/day). Run the backend for live streaming.</span>
       </div>
 
       <!-- KPI ROW -->
@@ -626,7 +643,42 @@ function render(d){
   if(d.ohlcv_4h && d.ohlcv_4h.length && candleSeries){
     candleSeries.setData(d.ohlcv_4h);
     const last=d.ohlcv_4h[d.ohlcv_4h.length-1];
-    document.getElementById('hdr-price').textContent='$'+last.close.toLocaleString();
+    document.getElementById('hdr-price').textContent='$'+last.close.toLocaleString(undefined,{maximumFractionDigits:1});
+  }
+
+  // ── Polymarket markets panel (live from state.polymarket_markets) ─────────
+  if(d.polymarket && d.polymarket.length){
+    const pmBody=document.getElementById('pm-body');
+    pmBody.innerHTML=d.polymarket.map(m=>{
+      const p=m.yes_price||0.5;
+      const pct=Math.round(p*100);
+      const cls=p>0.60?'text-bull':p<0.40?'text-bear':'';
+      const ourB=m.our_prob!=null
+        ?`<span class="mono" style="font-size:10.5px;color:var(--text-muted);margin-right:4px">ours:${m.our_prob.toFixed(2)}</span>`:'';
+      const vol=m.volume_24h
+        ?`<span style="font-size:10px;color:var(--text-muted)">&nbsp;$${(m.volume_24h/1000).toFixed(0)}k</span>`:'';
+      return `<div class="pm-row">
+        <span class="pm-q">${m.question||'—'}${vol}</span>
+        <div class="pm-bar"><div class="pm-bar-fill" style="width:${pct}%"></div></div>
+        ${ourB}<span class="pm-prob ${cls}">${p.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Risk assessment table (live from state.risk) ──────────────────────────
+  if(d.risk){
+    const r=d.risk;
+    const $ = id => document.getElementById(id);
+    if($('risk-pos') && r.position_size_pct!=null) $('risk-pos').textContent=r.position_size_pct.toFixed(1)+'%';
+    if($('risk-sl')  && r.stop_loss_pct!=null)     $('risk-sl').textContent=r.stop_loss_pct.toFixed(1)+'%';
+    if($('risk-tp')  && r.take_profit_pct!=null)   $('risk-tp').textContent=r.take_profit_pct.toFixed(1)+'%';
+    if($('risk-rr')  && r.risk_reward_ratio!=null) $('risk-rr').textContent='1 : '+r.risk_reward_ratio.toFixed(1);
+    if($('risk-vix')){
+      const vl=r.vix_risk_level||'NORMAL';
+      const vc=vl==='NORMAL'?'buy':vl==='ELEVATED'?'warn':'sell';
+      $('risk-vix').className='pill '+vc;
+      $('risk-vix').innerHTML='<span class="dot"></span>'+(vl==='NORMAL'?'CLEAR':vl);
+    }
   }
 
   // Polymarket markets — live binding (falls back to demo HTML when no live data)
@@ -658,12 +710,18 @@ function render(d){
 /* ════════════════════════════════════════════════════════════════════
    LIVE vs DEMO — try real backend WebSocket, else simulate
    ════════════════════════════════════════════════════════════════════ */
-function setConn(live){
+function setConn(mode){
+  // mode: 'live' | 'snapshot' | 'demo'
   const el=document.getElementById('conn');
-  el.className='conn '+(live?'live':'demo');
-  document.getElementById('conn-text').textContent=live?'Live':'Demo Data';
-  document.getElementById('demo-banner').style.display=live?'none':'flex';
-  document.getElementById('freqlink').href=live?'http://localhost:8080/ui/':'#';
+  const txt={live:'Live',snapshot:'Snapshot',demo:'Demo Data'}[mode];
+  el.className='conn '+(mode==='live'?'live':mode==='snapshot'?'snapshot':'demo');
+  document.getElementById('conn-text').textContent=txt;
+  document.getElementById('demo-banner').style.display=(mode==='demo')?'flex':'none';
+  const snapBanner=document.getElementById('snapshot-banner');
+  if(snapBanner) snapBanner.style.display=(mode==='snapshot')?'flex':'none';
+  document.getElementById('freqlink').href=(mode==='live')?'http://localhost:8080/ui/':'#';
+  const fstat=document.getElementById('frequi-status');
+  if(fstat) fstat.textContent=mode==='live'?'(open →)':'(offline)';
 }
 
 function demoState(){
@@ -681,7 +739,7 @@ function demoState(){
 
 let demoTimer=null, lastCandle=null;
 function startDemo(){
-  setConn(false);
+  setConn('demo');
   render(demoState());
   // gentle live-feel: update metrics + advance the last candle in real time
   demoTimer=setInterval(()=>{
@@ -697,70 +755,51 @@ function startDemo(){
   }, 3500);
 }
 
-/* ════════════════════════════════════════════════════════════════════
-   SNAPSHOT POLL — fallback when WebSocket unavailable (e.g. GitHub Pages)
-   Reads docs/data/latest.json written by _run_cycle() on the backend.
-   ════════════════════════════════════════════════════════════════════ */
-let _snapshotTimer=null;
-function startSnapshotPoll(){
-  function poll(){
-    fetch('data/latest.json?_='+Date.now())
-      .then(r=>r.ok?r.json():null)
-      .then(data=>{ if(data && Object.keys(data).length){ render(data); setConn('snapshot'); } })
-      .catch(()=>{});
-  }
-  poll();
-  _snapshotTimer=setInterval(poll, 30000);
-}
-
-function setConn(mode){
-  const el=document.getElementById('conn');
-  const textEl=document.getElementById('conn-text');
-  const banner=document.getElementById('demo-banner');
-  if(mode===true || mode==='live'){
-    el.className='conn live'; textEl.textContent='Live';
-    banner.style.display='none';
-    document.getElementById('freqlink').href='http://localhost:8080/ui/';
-  } else if(mode==='snapshot'){
-    el.className='conn live'; textEl.textContent='Snapshot';
-    banner.style.display='none';
-    document.getElementById('freqlink').href='#';
-  } else {
-    el.className='conn demo'; textEl.textContent='Demo Data';
-    banner.style.display='flex';
-    document.getElementById('freqlink').href='#';
-  }
+/* ── Tier 2: poll the committed snapshot.json (GitHub Pages / no backend) ──
+   Uses cache-busting (?t= + no-store) and res.ok check per fetch() semantics. */
+const SNAPSHOT_URL='data/latest.json';   // real data updated per publish
+const SNAPSHOT_POLL_MS=60000;
+let snapshotTimer=null, snapshotMeta=null;
+async function pollSnapshot(){
+  try{
+    const res=await fetch(`${SNAPSHOT_URL}?t=${Date.now()}`,{cache:'no-store'});
+    if(!res.ok) return false;                 // 404 → no snapshot committed yet
+    const payload=await res.json();
+    const data=payload.data||payload;          // tolerate enveloped or bare
+    if(!data || !Object.keys(data).length) return false;
+    snapshotMeta=payload.meta||null;
+    if(demoTimer){clearInterval(demoTimer);demoTimer=null;}
+    setConn('snapshot');
+    render(data);
+    if(snapshotMeta && snapshotMeta.generated_at){
+      const when=new Date(snapshotMeta.generated_at).toLocaleString();
+      const note=document.getElementById('snapshot-when');
+      if(note) note.textContent=when;
+    }
+    return true;
+  }catch(e){ return false; }
 }
 
 function tryLive(){
   let settled=false;
   try{
     const ws=new WebSocket('ws://localhost:8000/ws/signals');
-    const to=setTimeout(()=>{
-      if(!settled){
-        settled=true;
-        try{ws.close();}catch(e){}
-        // Try snapshot before falling back to demo
-        fetch('data/latest.json?_='+Date.now())
-          .then(r=>r.ok?r.json():null)
-          .then(data=>{
-            if(data && Object.keys(data).length){
-              setConn('snapshot');
-              if(demoTimer){ clearInterval(demoTimer); demoTimer=null; }
-              render(data);
-              startSnapshotPoll();
-            } else {
-              startDemo();
-            }
-          })
-          .catch(()=>startDemo());
-      }
-    }, 2500);
-    ws.onopen=()=>{ if(settled)return; settled=true; clearTimeout(to); if(demoTimer)clearInterval(demoTimer); if(_snapshotTimer){clearInterval(_snapshotTimer);_snapshotTimer=null;} setConn('live'); };
+    const to=setTimeout(()=>{ if(!settled){ settled=true; try{ws.close();}catch(e){} fallbackFromLive(); } }, 2500);
+    ws.onopen=()=>{ if(settled)return; settled=true; clearTimeout(to); if(demoTimer){clearInterval(demoTimer);demoTimer=null;} if(snapshotTimer){clearInterval(snapshotTimer);snapshotTimer=null;} setConn('live'); };
     ws.onmessage=ev=>{ try{ const msg=JSON.parse(ev.data); if(msg.data && Object.keys(msg.data).length) render(msg.data); }catch(e){} };
-    ws.onerror=()=>{ if(!settled){ settled=true; clearTimeout(to); startDemo(); } };
-    ws.onclose=()=>{ setConn(false); if(!demoTimer && !_snapshotTimer) startDemo(); };
-  }catch(e){ startDemo(); }
+    ws.onerror=()=>{ if(!settled){ settled=true; clearTimeout(to); fallbackFromLive(); } };
+    ws.onclose=()=>{ if(settled && !demoTimer && !snapshotTimer) fallbackFromLive(); };
+  }catch(e){ fallbackFromLive(); }
+}
+
+/* When no live backend: try snapshot first, fall back to demo. Keep polling
+   snapshot so an admin re-running the exporter upgrades the page automatically. */
+async function fallbackFromLive(){
+  const ok=await pollSnapshot();
+  if(!ok) startDemo();
+  if(!snapshotTimer){
+    snapshotTimer=setInterval(pollSnapshot, SNAPSHOT_POLL_MS);
+  }
 }
 
 /* boot */

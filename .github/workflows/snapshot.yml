@@ -1,0 +1,60 @@
+# Export a real dashboard snapshot to docs/data/snapshot.json on a schedule,
+# and commit it back so GitHub Pages serves live-ish data with no backend.
+#
+# Loop-safety: uses the default GITHUB_TOKEN — commits made with it do NOT
+# re-trigger workflows (GitHub platform guarantee), so there is no infinite
+# loop even though this commits to the repo. A `git diff --quiet` guard avoids
+# empty commits, and `[skip ci]` is added as defense-in-depth.
+name: Export Dashboard Snapshot
+
+on:
+  schedule:
+    - cron: '17 13 * * *'      # daily ~13:17 UTC (once per day); cron lag is normal
+  workflow_dispatch:            # admin can run on demand from the Actions tab
+    inputs:
+      mode:
+        description: 'cycle (real pipeline) or demo (no network)'
+        required: false
+        default: 'cycle'
+        type: choice
+        options: [cycle, demo]
+
+concurrency:
+  group: snapshot-export
+  cancel-in-progress: false
+
+permissions:
+  contents: write              # required to commit snapshot back
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install --quiet structlog pandas numpy pydantic pydantic-settings \
+            aiohttp ccxt yfinance pandas-ta langgraph scikit-learn joblib pyyaml
+
+      - name: Generate snapshot
+        env:
+          LLM_PROVIDER: none
+          FREQTRADE_MODE: 'off'
+        run: |
+          MODE="${{ github.event.inputs.mode || 'cycle' }}"
+          echo "Exporting snapshot (mode=$MODE)…"
+          PYTHONPATH=src python -m dashboard.snapshot_export --mode "$MODE" --out docs/data/latest.json \
+            || PYTHONPATH=src python -m dashboard.snapshot_export --mode demo
+
+      - name: Commit snapshot if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/snapshot.json docs/data/latest.json
+          git diff --staged --quiet || git commit -m "chore: update dashboard snapshot [skip ci]"
+          git push
