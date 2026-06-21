@@ -56,7 +56,7 @@ class TestKPICards:
 
 class TestDemoFallback:
     def test_demo_badge_visible(self, dash: Page):
-        expect(page := dash.locator("#conn-text")).to_have_text("Demo Data")
+        expect(dash.locator("#conn-text")).to_have_text("Demo Data")
 
     def test_demo_banner_shown(self, dash: Page):
         banner = dash.locator("#demo-banner")

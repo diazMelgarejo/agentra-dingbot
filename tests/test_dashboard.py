@@ -11,14 +11,10 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.testclient import WebSocketTestSession
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -63,16 +59,14 @@ class TestHealthEndpoint:
 
 class TestWebSocketNoToken:
     def test_ws_connects_and_receives_heartbeat(self, app):
-        with TestClient(app) as client:
-            with client.websocket_connect("/ws/signals") as ws:
-                msg = ws.receive_json()
+        with TestClient(app) as client, client.websocket_connect("/ws/signals") as ws:
+            msg = ws.receive_json()
         assert msg["type"] in ("heartbeat", "cycle_update")
         assert "timestamp" in msg
 
     def test_ws_message_has_data_key(self, app):
-        with TestClient(app) as client:
-            with client.websocket_connect("/ws/signals") as ws:
-                msg = ws.receive_json()
+        with TestClient(app) as client, client.websocket_connect("/ws/signals") as ws:
+            msg = ws.receive_json()
         assert "data" in msg
 
 
@@ -81,24 +75,22 @@ class TestWebSocketNoToken:
 class TestWebSocketTokenGate:
     def test_ws_rejects_missing_token(self, app_with_token):
         """Connection without ?token= must be closed with 4401."""
-        with TestClient(app_with_token) as client:
-            with client.websocket_connect("/ws/signals") as ws:
-                msg = ws.receive_json()
-        # expect the server to close with a 4401 close code or send an error
+        with TestClient(app_with_token) as client, client.websocket_connect("/ws/signals") as ws:
+            msg = ws.receive_json()
         assert msg.get("type") == "error" or msg.get("code") == 4401
 
     def test_ws_rejects_wrong_token(self, app_with_token):
         """Connection with wrong token must be rejected."""
-        with TestClient(app_with_token) as client:
-            with client.websocket_connect("/ws/signals?token=wrongtoken") as ws:
-                msg = ws.receive_json()
+        with TestClient(app_with_token) as client, \
+             client.websocket_connect("/ws/signals?token=wrongtoken") as ws:
+            msg = ws.receive_json()
         assert msg.get("type") == "error" or msg.get("code") == 4401
 
     def test_ws_accepts_correct_token(self, app_with_token):
         """Connection with correct token must succeed."""
-        with TestClient(app_with_token) as client:
-            with client.websocket_connect("/ws/signals?token=secret123") as ws:
-                msg = ws.receive_json()
+        with TestClient(app_with_token) as client, \
+             client.websocket_connect("/ws/signals?token=secret123") as ws:
+            msg = ws.receive_json()
         assert msg["type"] in ("heartbeat", "cycle_update")
 
 
