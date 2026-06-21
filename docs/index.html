@@ -587,6 +587,7 @@ function genCandles(n){
    ════════════════════════════════════════════════════════════════════ */
 const SIGNAL_CLASS = s => (s||'neutral').toLowerCase().replace(/\s+/g,'_');
 const fmtSignal = s => (s||'NEUTRAL').replace(/_/g,' ');
+function escHtml(s){ const d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
 
 function setPill(id, signal){
   const el=document.getElementById(id); if(!el) return;
@@ -679,6 +680,31 @@ function render(d){
       $('risk-vix').innerHTML='<span class="dot"></span>'+(vl==='NORMAL'?'CLEAR':vl);
     }
   }
+
+  // Polymarket markets — live binding (falls back to demo HTML when no live data)
+  if(d.polymarket_markets && d.polymarket_markets.length){
+    const pmBody=document.getElementById('pm-body');
+    pmBody.innerHTML=d.polymarket_markets.map(m=>{
+      const pct=Math.round((m.yes_price||0.5)*100);
+      const cls=m.yes_price>0.55?'text-bull':m.yes_price<0.45?'text-bear':'';
+      return `<div class="pm-row">
+        <span class="pm-q">${escHtml(m.question)}</span>
+        <div class="pm-bar"><div class="pm-bar-fill" style="width:${pct}%"></div></div>
+        <span class="pm-prob ${cls}">${(m.yes_price||0.5).toFixed(2)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Risk assessment — live binding
+  const risk=d.risk;
+  if(risk){
+    document.getElementById('risk-pos').textContent=(risk.position_size_pct*100).toFixed(1)+'%';
+    document.getElementById('risk-sl').textContent=(risk.stop_loss_pct*100).toFixed(1)+'%';
+    document.getElementById('risk-tp').textContent=(risk.take_profit_pct*100).toFixed(1)+'%';
+    document.getElementById('risk-rr').textContent='1 : '+risk.risk_reward_ratio.toFixed(1);
+  }
+  const vixLevel=(d.vix_risk_level||'NORMAL').toUpperCase();
+  setPill('risk-vix', vixLevel==='NORMAL'?'CLEAR':vixLevel);
 }
 
 /* ════════════════════════════════════════════════════════════════════

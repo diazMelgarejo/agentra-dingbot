@@ -7,7 +7,7 @@ Endpoints:
   POST /api/run                  — trigger one analysis cycle
   POST /webhook/tradingview      — TradingView alert webhook receiver
   GET  /webhook/tradingview/signals — inspect queued TV signals
-  WS   /ws/signals               — WebSocket live push (Step 8)
+  WS   /ws/signals[?token=<t>]   — WebSocket live push (Step 8)
 """
 from __future__ import annotations
 
@@ -17,10 +17,11 @@ import hmac
 import json
 import os
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 logger = structlog.get_logger(__name__)
@@ -28,6 +29,13 @@ logger = structlog.get_logger(__name__)
 # ── TradingView webhook source IPs (published by TradingView, rarely change)
 _TV_ALLOWED_IPS = {"52.89.214.238", "34.212.75.30", "54.218.53.128", "52.32.178.7"}
 TRADINGVIEW_SECRET = os.getenv("TRADINGVIEW_WEBHOOK_SECRET", "")
+
+# ── Read-only WebSocket token (empty string = no auth required)
+_WS_READ_TOKEN: str = os.getenv("WS_READ_TOKEN", "")
+
+# ── Snapshot export path — writes docs/data/latest.json after each cycle
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SNAPSHOT_PATH: Path = _REPO_ROOT / "docs" / "data" / "latest.json"
 
 # ── In-process shared state ───────────────────────────────────────────────────
 _latest_state: dict[str, Any] = {}
@@ -40,6 +48,8 @@ _MAX_STORED_SIGNALS = 50
 # ── App factory ───────────────────────────────────────────────────────────────
 
 def create_app() -> FastAPI:
+    # Capture token at factory time so tests can inject via env before calling create_app()
+    ws_token: str = os.getenv("WS_READ_TOKEN", _WS_READ_TOKEN)
     app = FastAPI(title="Agentic SuperBot", version="0.3.0")
     app.add_middleware(CORSMiddleware, allow_origins=["*"],
                        allow_methods=["*"], allow_headers=["*"])
@@ -123,11 +133,18 @@ def create_app() -> FastAPI:
         return {"count": len(_external_signals),
                 "signals": _external_signals[-10:]}
 
-    # ── WebSocket (Step 8 — currently pushes cached state every 60s) ─────────
+    # ── WebSocket (Step 8) ───────────────────────────────────────────────────
 
     @app.websocket("/ws/signals")
-    async def ws_signals(websocket: WebSocket):
+    async def ws_signals(websocket: WebSocket,
+                         token: str = Query(default="")):
         from dashboard.state_view import to_dashboard_view
+        if ws_token and token != ws_token:
+            await websocket.accept()
+            await websocket.send_json({"type": "error", "code": 4401,
+                                       "message": "Unauthorized"})
+            await websocket.close(code=4401)
+            return
         await websocket.accept()
         try:
             while True:
@@ -145,13 +162,30 @@ def create_app() -> FastAPI:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+async def _run_cycle_inner(symbol: str) -> dict[str, Any]:
+    """Thin wrapper so tests can patch the orchestrator call."""
+    from core.orchestrator import run_one_cycle
+    return await run_one_cycle(symbol, dry_run=True)
+
+
 async def _run_cycle(symbol: str) -> None:
     global _latest_state
     try:
-        from core.orchestrator import run_one_cycle
-        _latest_state = await run_one_cycle(symbol, dry_run=True)
+        _latest_state = await _run_cycle_inner(symbol)
+        _write_snapshot(_latest_state)
     except Exception as exc:
         logger.error("dashboard_cycle_failed", error=str(exc))
+
+
+def _write_snapshot(state: dict[str, Any]) -> None:
+    """Write serialized state to docs/data/latest.json for Pages polling."""
+    snap_path = os.getenv("_SNAPSHOT_PATH_OVERRIDE", "")
+    path = Path(snap_path) if snap_path else _SNAPSHOT_PATH
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(_serialize_state(state), indent=2))
+    except Exception as exc:
+        logger.warning("snapshot_write_failed", error=str(exc))
 
 
 def _normalise_symbol(raw: str) -> str:

@@ -13,6 +13,10 @@ dev:
 test:
 	python -m pytest tests/
 
+# Playwright UI + responsive smoke tests (separate from asyncio suite)
+test-ui:
+	python -m pytest tests/ui/ -v
+
 # 80%+ coverage per TDD SKILL.md requirements
 coverage:
 	python -m pytest tests/ --cov=src --cov-report=term-missing \
