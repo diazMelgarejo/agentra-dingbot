@@ -123,7 +123,7 @@ This project follows TDD strictly per `tdd.md` and `SKILL.md`:
 | 5 | FreqAI ML bridge | 42 | ✅ Done (1 skip: no LightGBM) |
 | 6 | Backtest validation | 61 | ✅ Done |
 | 7 | Executor safety | 28 | ✅ Done |
-| 8 | React dashboard | 0 | ⬜ Next |
+| 8 | Static dashboard + WS token + snapshot + UI tests | 27 | ✅ Done |
 
 ---
 

@@ -570,6 +570,7 @@ function genCandles(n){
    ════════════════════════════════════════════════════════════════════ */
 const SIGNAL_CLASS = s => (s||'neutral').toLowerCase().replace(/\s+/g,'_');
 const fmtSignal = s => (s||'NEUTRAL').replace(/_/g,' ');
+function escHtml(s){ const d=document.createElement('div'); d.textContent=String(s||''); return d.innerHTML; }
 
 function setPill(id, signal){
   const el=document.getElementById(id); if(!el) return;
@@ -627,6 +628,31 @@ function render(d){
     const last=d.ohlcv_4h[d.ohlcv_4h.length-1];
     document.getElementById('hdr-price').textContent='$'+last.close.toLocaleString();
   }
+
+  // Polymarket markets — live binding (falls back to demo HTML when no live data)
+  if(d.polymarket_markets && d.polymarket_markets.length){
+    const pmBody=document.getElementById('pm-body');
+    pmBody.innerHTML=d.polymarket_markets.map(m=>{
+      const pct=Math.round((m.yes_price||0.5)*100);
+      const cls=m.yes_price>0.55?'text-bull':m.yes_price<0.45?'text-bear':'';
+      return `<div class="pm-row">
+        <span class="pm-q">${escHtml(m.question)}</span>
+        <div class="pm-bar"><div class="pm-bar-fill" style="width:${pct}%"></div></div>
+        <span class="pm-prob ${cls}">${(m.yes_price||0.5).toFixed(2)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Risk assessment — live binding
+  const risk=d.risk;
+  if(risk){
+    document.getElementById('risk-pos').textContent=(risk.position_size_pct*100).toFixed(1)+'%';
+    document.getElementById('risk-sl').textContent=(risk.stop_loss_pct*100).toFixed(1)+'%';
+    document.getElementById('risk-tp').textContent=(risk.take_profit_pct*100).toFixed(1)+'%';
+    document.getElementById('risk-rr').textContent='1 : '+risk.risk_reward_ratio.toFixed(1);
+  }
+  const vixLevel=(d.vix_risk_level||'NORMAL').toUpperCase();
+  setPill('risk-vix', vixLevel==='NORMAL'?'CLEAR':vixLevel);
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -671,15 +697,69 @@ function startDemo(){
   }, 3500);
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   SNAPSHOT POLL — fallback when WebSocket unavailable (e.g. GitHub Pages)
+   Reads docs/data/latest.json written by _run_cycle() on the backend.
+   ════════════════════════════════════════════════════════════════════ */
+let _snapshotTimer=null;
+function startSnapshotPoll(){
+  function poll(){
+    fetch('data/latest.json?_='+Date.now())
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{ if(data && Object.keys(data).length){ render(data); setConn('snapshot'); } })
+      .catch(()=>{});
+  }
+  poll();
+  _snapshotTimer=setInterval(poll, 30000);
+}
+
+function setConn(mode){
+  const el=document.getElementById('conn');
+  const textEl=document.getElementById('conn-text');
+  const banner=document.getElementById('demo-banner');
+  if(mode===true || mode==='live'){
+    el.className='conn live'; textEl.textContent='Live';
+    banner.style.display='none';
+    document.getElementById('freqlink').href='http://localhost:8080/ui/';
+  } else if(mode==='snapshot'){
+    el.className='conn live'; textEl.textContent='Snapshot';
+    banner.style.display='none';
+    document.getElementById('freqlink').href='#';
+  } else {
+    el.className='conn demo'; textEl.textContent='Demo Data';
+    banner.style.display='flex';
+    document.getElementById('freqlink').href='#';
+  }
+}
+
 function tryLive(){
   let settled=false;
   try{
     const ws=new WebSocket('ws://localhost:8000/ws/signals');
-    const to=setTimeout(()=>{ if(!settled){ settled=true; try{ws.close();}catch(e){} startDemo(); } }, 2500);
-    ws.onopen=()=>{ if(settled)return; settled=true; clearTimeout(to); if(demoTimer)clearInterval(demoTimer); setConn(true); };
+    const to=setTimeout(()=>{
+      if(!settled){
+        settled=true;
+        try{ws.close();}catch(e){}
+        // Try snapshot before falling back to demo
+        fetch('data/latest.json?_='+Date.now())
+          .then(r=>r.ok?r.json():null)
+          .then(data=>{
+            if(data && Object.keys(data).length){
+              setConn('snapshot');
+              if(demoTimer){ clearInterval(demoTimer); demoTimer=null; }
+              render(data);
+              startSnapshotPoll();
+            } else {
+              startDemo();
+            }
+          })
+          .catch(()=>startDemo());
+      }
+    }, 2500);
+    ws.onopen=()=>{ if(settled)return; settled=true; clearTimeout(to); if(demoTimer)clearInterval(demoTimer); if(_snapshotTimer){clearInterval(_snapshotTimer);_snapshotTimer=null;} setConn('live'); };
     ws.onmessage=ev=>{ try{ const msg=JSON.parse(ev.data); if(msg.data && Object.keys(msg.data).length) render(msg.data); }catch(e){} };
     ws.onerror=()=>{ if(!settled){ settled=true; clearTimeout(to); startDemo(); } };
-    ws.onclose=()=>{ setConn(false); if(!demoTimer) startDemo(); };
+    ws.onclose=()=>{ setConn(false); if(!demoTimer && !_snapshotTimer) startDemo(); };
   }catch(e){ startDemo(); }
 }
 

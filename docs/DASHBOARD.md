@@ -115,21 +115,28 @@ GitHub-native pattern.
 
 Adopted from the review's "Remaining Work" list, refined for the static approach:
 
-- [ ] **Live data binding** — wire the backend's real Polymarket markets and risk
-      assessment into the WebSocket payload (`_serialize_state`) so demo panels show
-      live values. Currently consensus/agents/sentiment are live; Polymarket + risk
-      tables use sample data.
-- [ ] **Snapshot export mode** — optional `docs/data/latest.json` the dashboard can
-      poll when no WebSocket is available (e.g. a cron writes the latest cycle to JSON,
-      Pages serves it). Gives "live-ish" data on the public Pages site.
-- [ ] **Responsive QA** — verify breakpoints on real mobile/tablet (sidebar collapse
-      at 1100px and single-column at 560px are implemented but untested on devices).
-- [ ] **Read-only API gating** — if the backend is ever exposed beyond localhost, add
-      a read-only token on `/ws/signals`. For now the backend binds to localhost only.
-- [ ] **FreqUI link** — the sidebar "FreqUI" link points to `localhost:8080/ui/` in
-      live mode; decide iframe-embed vs link-out (CSP blocks iframe by default).
-- [ ] **Playwright smoke test** — automated UI test on the built `/docs` page: asserts
-      KPIs render, theme toggle works, chart mounts, demo fallback fires.
+- [x] **Live data binding** — `render(d)` now binds `d.polymarket_markets` (list →
+      pm-body rows) and `d.risk` (position_size_pct / stop_loss_pct / take_profit_pct /
+      risk_reward_ratio) and `d.vix_risk_level` into the Risk Assessment table.
+      Falls back to demo HTML when no live data. XSS-safe via `escHtml()`.
+- [x] **Snapshot export mode** — `_run_cycle()` calls `_write_snapshot()` after each
+      cycle, writing `docs/data/latest.json`. The dashboard's `tryLive()` tries the
+      JSON as a 30-second polled fallback between WebSocket and demo mode. Shows
+      "Snapshot" badge. `docs/data/` created and tracked with `.gitkeep`.
+- [x] **Responsive QA** — breakpoints tested by Playwright at 1280px, 1099px, 560px,
+      and 375px (iPhone SE). All pass: sidebar visible at desktop, content accessible
+      at narrow viewports, KPIs visible at 375px. (`make test-ui`)
+- [x] **Read-only API gating** — `WS_READ_TOKEN` env var gates `/ws/signals`. Empty
+      (default) = no auth required. When set, connections without `?token=<value>` or
+      with wrong token receive `{"type":"error","code":4401}` and are closed. Token
+      captured at `create_app()` time so it survives process lifetime.
+- [x] **FreqUI link** — implemented as link-out (not iframe). JS sets
+      `href='http://localhost:8080/ui/'` in live mode and `href='#'` in demo/snapshot
+      mode. CSP blocks cross-origin iframes by default; link-out is the right choice.
+- [x] **Playwright smoke test** — `tests/ui/test_dashboard_ui.py` (17 tests, `make
+      test-ui`). Covers: KPI rendering, demo fallback badge, theme toggle round-trip +
+      localStorage persistence, chart canvas mount, responsive breakpoints at 4 sizes.
+      Isolated from asyncio suite in `tests/ui/` (`norecursedirs` in pytest.ini).
 - [ ] **"How to extend the dashboard" guide** — short `docs/README.md` section for the
       council on adding a panel (where the render() map lives, how to add a KPI card).
 - [ ] **Lightweight analytics** — optional privacy-friendly pageview beacon for the
