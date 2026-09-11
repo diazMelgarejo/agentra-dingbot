@@ -1,33 +1,33 @@
 {
   "meta": {
-    "generated_at": "2026-09-10T17:01:52.111957+00:00",
+    "generated_at": "2026-09-11T17:02:43.648969+00:00",
     "mode": "cycle",
     "symbol": "BTC/USDT",
-    "git_sha": "1d98da9",
+    "git_sha": "424e342",
     "schema": "agentra.dashboard.v1"
   },
   "data": {
     "symbol": "BTC/USDT",
-    "debate_consensus": "SELL",
-    "debate_confidence": 0.5,
+    "debate_consensus": "NEUTRAL",
+    "debate_confidence": 0.0,
     "sentiment": {
-      "signal": "SELL",
-      "fear_greed_index": 69,
-      "vix": 17.31
+      "signal": "NEUTRAL",
+      "fear_greed_index": 56,
+      "vix": 15.72
     },
     "onchain": {
       "signal": "NEUTRAL",
       "funding_rate": null
     },
     "risk": {
-      "approved": true,
-      "position_size_pct": 5.0,
-      "stop_loss_pct": 2.5,
-      "take_profit_pct": 5.0,
-      "risk_reward_ratio": 2.0,
-      "max_loss_pct": 0.12,
+      "approved": false,
+      "position_size_pct": 0.0,
+      "stop_loss_pct": 0.0,
+      "take_profit_pct": 0.0,
+      "risk_reward_ratio": 0.0,
+      "max_loss_pct": 0.0,
       "vix_risk_level": "NORMAL",
-      "reasoning": "SELL @ 50% \u2192 5.0% pos | SL:2.5% | TP:5.0% | RR:2.0"
+      "reasoning": "NEUTRAL signal \u2014 no spot trade"
     }
   }
 }
