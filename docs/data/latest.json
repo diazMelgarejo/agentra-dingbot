@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generated_at": "2026-09-19T16:32:30.967806+00:00",
+    "generated_at": "2026-09-20T16:51:12.035365+00:00",
     "mode": "cycle",
     "symbol": "BTC/USDT",
-    "git_sha": "065e69f",
+    "git_sha": "2902dcf",
     "schema": "agentra.dashboard.v1"
   },
   "data": {
