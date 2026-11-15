@@ -1,18 +1,18 @@
 {
   "meta": {
-    "generated_at": "2026-11-14T18:45:51.457811+00:00",
+    "generated_at": "2026-11-15T19:23:51.861112+00:00",
     "mode": "cycle",
     "symbol": "BTC/USDT",
-    "git_sha": "2482126",
+    "git_sha": "ef5e02b",
     "schema": "agentra.dashboard.v1"
   },
   "data": {
     "symbol": "BTC/USDT",
-    "debate_consensus": "BUY",
-    "debate_confidence": 0.5,
+    "debate_consensus": "STRONG_BUY",
+    "debate_confidence": 1.0,
     "sentiment": {
-      "signal": "BUY",
-      "fear_greed_index": 13,
+      "signal": "STRONG_BUY",
+      "fear_greed_index": 10,
       "vix": 19.3
     },
     "onchain": {
@@ -21,13 +21,13 @@
     },
     "risk": {
       "approved": true,
-      "position_size_pct": 7.5,
+      "position_size_pct": 25.0,
       "stop_loss_pct": 2.5,
-      "take_profit_pct": 6.25,
-      "risk_reward_ratio": 2.5,
-      "max_loss_pct": 0.19,
+      "take_profit_pct": 7.5,
+      "risk_reward_ratio": 3.0,
+      "max_loss_pct": 0.62,
       "vix_risk_level": "NORMAL",
-      "reasoning": "BUY @ 50% \u2192 7.5% pos | SL:2.5% | TP:6.2% | RR:2.5"
+      "reasoning": "STRONG_BUY @ 100% \u2192 25.0% pos | SL:2.5% | TP:7.5% | RR:3.0"
     }
   }
 }
