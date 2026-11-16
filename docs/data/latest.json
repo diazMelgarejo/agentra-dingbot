@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generated_at": "2026-11-15T19:23:51.861112+00:00",
+    "generated_at": "2026-11-16T22:55:34.095147+00:00",
     "mode": "cycle",
     "symbol": "BTC/USDT",
-    "git_sha": "ef5e02b",
+    "git_sha": "dee2ac9",
     "schema": "agentra.dashboard.v1"
   },
   "data": {
@@ -13,7 +13,7 @@
     "sentiment": {
       "signal": "STRONG_BUY",
       "fear_greed_index": 10,
-      "vix": 19.3
+      "vix": 22.91
     },
     "onchain": {
       "signal": "NEUTRAL",
