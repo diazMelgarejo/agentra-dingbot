@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generated_at": "2026-11-22T20:23:33.575170+00:00",
+    "generated_at": "2026-11-24T00:58:10.806396+00:00",
     "mode": "cycle",
     "symbol": "BTC/USDT",
-    "git_sha": "606c444",
+    "git_sha": "be11b64",
     "schema": "agentra.dashboard.v1"
   },
   "data": {
@@ -13,7 +13,7 @@
     "sentiment": {
       "signal": "BUY",
       "fear_greed_index": 11,
-      "vix": 35.89
+      "vix": 26.62
     },
     "onchain": {
       "signal": "NEUTRAL",
@@ -21,13 +21,13 @@
     },
     "risk": {
       "approved": true,
-      "position_size_pct": 3.75,
+      "position_size_pct": 7.5,
       "stop_loss_pct": 2.5,
       "take_profit_pct": 6.25,
       "risk_reward_ratio": 2.5,
       "max_loss_pct": 0.19,
-      "vix_risk_level": "ELEVATED",
-      "reasoning": "BUY @ 50% \u2192 3.8% pos | SL:2.5% | TP:6.2% | RR:2.5"
+      "vix_risk_level": "NORMAL",
+      "reasoning": "BUY @ 50% \u2192 7.5% pos | SL:2.5% | TP:6.2% | RR:2.5"
     }
   }
 }
